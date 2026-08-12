@@ -7,7 +7,11 @@ const STORAGE_KEY = "lexisle:data:v1";
 function readState() {
   try {
     const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "null");
-    if (stored?.version === 1) return { ...seedState, ...stored };
+    if (stored?.version === 1) return {
+      ...seedState,
+      ...stored,
+      settings: { ...seedState.settings, ...stored.settings, ai: { ...seedState.settings.ai, ...stored.settings?.ai } },
+    };
   } catch {
     // Invalid user data is replaced by the recoverable seed below.
   }
@@ -29,7 +33,7 @@ export function useLexisleStore() {
     setState((current) => recipe(current));
   }, []);
 
-  const addArticle = useCallback(({ title, source, url, text, difficulty = "中级" }) => {
+  const addArticle = useCallback(({ title, source, url, text, difficulty = "中级", analysis }) => {
     const id = uid("article");
     const article = {
       id,
@@ -43,8 +47,9 @@ export function useLexisleStore() {
       saved: false,
       progress: 0,
       text: text.trim(),
+      analysis: analysis?.length ? analysis : undefined,
     };
-    const analyzed = analyzeText(article.text);
+    const analyzed = article.analysis || analyzeText(article.text);
     update((current) => ({ ...current, articles: [article, ...current.articles] }));
     return { article, analyzed };
   }, [update]);
@@ -112,7 +117,7 @@ export function useLexisleStore() {
   const deleteNote = useCallback((id) => update((current) => ({ ...current, notes: current.notes.filter((note) => note.id !== id) })), [update]);
   const updatePlan = useCallback((plan) => update((current) => ({ ...current, plans: { ...current.plans, [plan.date]: plan } })), [update]);
   const updateSettings = useCallback((settings) => update((current) => ({ ...current, settings: { ...current.settings, ...settings } })), [update]);
-  const replaceFromCloud = useCallback((cloud) => update((current) => ({ ...current, ...cloud, settings: { ...current.settings, ...cloud.settings } })), [update]);
+  const replaceFromCloud = useCallback((cloud) => update((current) => ({ ...current, ...cloud, settings: { ...current.settings, ...cloud.settings, ai: { ...current.settings.ai, ...cloud.settings?.ai } } })), [update]);
 
   const actions = useMemo(() => ({ addArticle, toggleArticleSaved, updateProgress, addVocabulary, removeVocabulary, recordReview, saveNote, deleteNote, updatePlan, updateSettings, replaceFromCloud }), [addArticle, toggleArticleSaved, updateProgress, addVocabulary, removeVocabulary, recordReview, saveNote, deleteNote, updatePlan, updateSettings, replaceFromCloud]);
   return { state, actions };

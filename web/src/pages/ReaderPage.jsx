@@ -12,7 +12,7 @@ function Paragraph({ text, candidates, onWord }) {
 }
 
 export function ReaderPage({ article, state, actions, close, notify }) {
-  const analyzed = useMemo(() => analyzeText(article.text), [article.text]);
+  const analyzed = useMemo(() => article.analysis?.length ? article.analysis : analyzeText(article.text), [article.analysis, article.text]);
   const [active, setActive] = useState(analyzed[0] || null);
   const savedWords = new Set(state.vocabulary.map((item) => item.word.toLowerCase()));
   const paragraphs = article.text.split(/\n\s*\n/).filter(Boolean);

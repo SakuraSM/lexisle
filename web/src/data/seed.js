@@ -96,7 +96,15 @@ export const seedState = {
     [todayKey]: { date: todayKey, readingTarget: 1, wordTarget: 5, reviewTarget: 8, readingDone: 0, wordDone: 1, reviewDone: 0 },
   },
   reviewEvents: [],
-  settings: { dailyGoal: 5, reminderTime: "20:30", notifications: false, autoSaveWords: true, difficulty: "中级", theme: "light" },
+  settings: {
+    dailyGoal: 5,
+    reminderTime: "20:30",
+    notifications: false,
+    autoSaveWords: true,
+    difficulty: "中级",
+    theme: "light",
+    ai: { enabled: false, endpoint: "", model: "", maxWords: 12, prompt: "", rememberKey: false },
+  },
   streak: 15,
   lastStudyDate: todayKey,
 };

@@ -127,3 +127,14 @@ final result: passed
 Intentional implementation limit: third-party article URL extraction uses the public Jina Reader endpoint and therefore depends on that service and the source site allowing access. Direct English-text paste remains fully local and is the reliable fallback.
 
 No actionable P0, P1 or P2 visual or interaction mismatch remains. The implementation was faithfully verified against the accepted Lexisle design system and the generated library design spec.
+
+## AI vocabulary extension — 2026-08-12
+
+- Visual reference: `web/library-concept.png`; latest production-browser evidence: `web/qa-ai-settings-desktop.png`.
+- The settings extension reuses the accepted violet token, open white panel, compact labels, 10px controls, one-pixel borders, and existing typography. It introduces no unrelated layout or copy drift.
+- Desktop uses a two-column provider form inside the full-width settings rail. The 820px breakpoint collapses settings and AI fields to one column, stacks connection feedback below the action, and retains the mobile header, bottom navigation, and independent content scroll.
+- Provider endpoint, exact model ID, word limit, optional prompt, masked API Key, persistence choice, connection test, and browser CORS guidance are all visible in the product hierarchy. The API Key remains visually masked and is described as browser-only.
+- Live browser verification saved a custom OpenAI-compatible configuration, showed a friendly connection error for an unavailable endpoint, imported a 60-word article through automatic local fallback, opened the reader, and rendered 12 inline vocabulary highlights. The final toast preserved both the successful local result and the AI fallback reason.
+- Output validation was verified separately: malformed items, duplicates, words absent from the article, and entries without a Chinese definition are rejected before storage.
+
+No actionable P0, P1 or P2 visual or interaction mismatch was introduced by the AI configuration extension.

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ArrowRightIcon, BookmarkFilledIcon, BookmarkIcon, Link2Icon, ReaderIcon } from "@radix-ui/react-icons";
 import { analyzeText } from "../lib/learning.js";
+import { analyzeVocabularyWithAi, readAiApiKey } from "../lib/aiVocabulary.js";
 import { EmptyState, PageHeader, ProgressMeter } from "./PagePrimitives.jsx";
 
 function cleanReaderText(raw) {
@@ -35,8 +36,19 @@ export function LibraryPage({ state, actions, openArticle, notify }) {
         articleTitle ||= raw.match(/^Title:\s*(.+)$/m)?.[1]?.trim() || new URL(url).hostname;
       }
       if (articleText.split(/\s+/).length < 40) throw new Error("文章内容太短，请至少提供 40 个英文单词。");
-      const { article, analyzed } = actions.addArticle({ title: articleTitle, url: mode === "url" ? url : "", text: articleText, difficulty: difficulty === "全部" ? "中级" : difficulty });
-      notify(`分析完成：识别到 ${analyzed.length} 个重点词汇`);
+      let aiAnalysis;
+      let analysisMode = "本地";
+      let aiFallbackReason = "";
+      if (state.settings.ai?.enabled) {
+        try {
+          aiAnalysis = await analyzeVocabularyWithAi(state.settings.ai, articleText, readAiApiKey());
+          analysisMode = `AI · ${state.settings.ai.model}`;
+        } catch (aiError) {
+          aiFallbackReason = aiError.message;
+        }
+      }
+      const { article, analyzed } = actions.addArticle({ title: articleTitle, url: mode === "url" ? url : "", text: articleText, difficulty: difficulty === "全部" ? "中级" : difficulty, analysis: aiAnalysis });
+      notify(`${analysisMode} 分析完成：识别到 ${analyzed.length} 个重点词汇${aiFallbackReason ? `；AI 未使用：${aiFallbackReason}` : ""}`);
       openArticle(article.id);
       setUrl(""); setTitle(""); setText("");
     } catch (importError) {
@@ -52,7 +64,7 @@ export function LibraryPage({ state, actions, openArticle, notify }) {
       <div className="library-layout">
         <div className="library-primary">
           <section className="import-panel open-panel">
-            <div className="section-heading"><div><h2>导入英文文章</h2><p>链接读取或直接粘贴原文</p></div><ReaderIcon /></div>
+            <div className="section-heading"><div><h2>导入英文文章</h2><p>链接读取或直接粘贴原文 · {state.settings.ai?.enabled ? `AI ${state.settings.ai.model || "待配置"}` : "本地识别"}</p></div><ReaderIcon /></div>
             <div className="segmented-control"><button className={mode === "url" ? "is-active" : ""} type="button" onClick={() => setMode("url")}>粘贴文章链接</button><button className={mode === "text" ? "is-active" : ""} type="button" onClick={() => setMode("text")}>粘贴英文原文</button></div>
             <form className="import-form" onSubmit={importArticle}>
               {mode === "url" ? <label className="url-field"><Link2Icon /><input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/english-article" /></label> : <><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="文章标题" /><textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="在这里粘贴完整英文文章……" rows="6" /></>}
@@ -65,15 +77,15 @@ export function LibraryPage({ state, actions, openArticle, notify }) {
             <div className="section-heading"><div><h2>{savedOnly ? "已收藏" : "最近阅读"}</h2><p>{articles.length} 篇文章</p></div><button type="button" onClick={() => setSavedOnly((value) => !value)}>{savedOnly ? "查看全部" : "只看收藏"}</button></div>
             <div className="filter-row"><span>难度</span>{["全部", "初级", "中级", "中高级", "高级"].map((level) => <button key={level} className={difficulty === level ? "is-active" : ""} type="button" onClick={() => setDifficulty(level)}>{level}</button>)}</div>
             {articles.length ? <div className="article-list">{articles.map((article) => {
-              const analyzed = analyzeText(article.text);
+              const analyzed = article.analysis?.length ? article.analysis : analyzeText(article.text);
               return <article key={article.id}><img src={article.image} alt="" /><div><h3>{article.title}</h3><p>{new Date(article.createdAt).toLocaleDateString("zh-CN")} · {article.text.split(/\s+/).length} 词 · 生词 {analyzed.length} 个 · {article.difficulty}</p><ProgressMeter value={article.progress} max={100} /></div><button className="icon-button" type="button" aria-label={article.saved ? "取消收藏" : "收藏"} onClick={() => actions.toggleArticleSaved(article.id)}>{article.saved ? <BookmarkFilledIcon /> : <BookmarkIcon />}</button><button className="secondary-button" type="button" onClick={() => openArticle(article.id)}>{article.progress ? "继续阅读" : "开始阅读"}<ArrowRightIcon /></button></article>;
             })}</div> : <EmptyState title="暂无符合条件的文章" description="调整筛选条件或导入一篇新的英文文章。" />}
           </section>
         </div>
         <aside className="library-aside open-panel">
           <h2>分析能力</h2>
-          <ol><li><strong>1</strong><div><b>清理文章正文</b><span>去除导航、图片链接和多余格式</span></div></li><li><strong>2</strong><div><b>识别重点词汇</b><span>结合词频、词长和内置学习词典</span></div></li><li><strong>3</strong><div><b>生成复习计划</b><span>收藏后按记忆曲线安排复习</span></div></li></ol>
-          <p>链接读取使用公开 Reader 服务；若网站限制访问，可直接粘贴英文原文。</p>
+          <ol><li><strong>1</strong><div><b>清理文章正文</b><span>去除导航、图片链接和多余格式</span></div></li><li><strong>2</strong><div><b>{state.settings.ai?.enabled ? "AI 语境识词" : "本地识别词汇"}</b><span>{state.settings.ai?.enabled ? "由自定义模型分析难度、释义和原句" : "结合词频、词长和内置学习词典"}</span></div></li><li><strong>3</strong><div><b>生成复习计划</b><span>收藏后按记忆曲线安排复习</span></div></li></ol>
+          <p>AI 配置保存在当前浏览器；接口不可用时自动回退本地识别，不阻塞文章导入。</p>
         </aside>
       </div>
     </div>
