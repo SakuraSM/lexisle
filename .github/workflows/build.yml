@@ -45,8 +45,17 @@ jobs:
       - name: Test learning logic
         run: npm test
 
+      - name: Test React pages
+        run: npm run test:ui
+
       - name: Test Sites worker
         run: npm run test:sites
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Test desktop and mobile flows
+        run: npm run test:e2e
 
       - name: Package static bundle
         working-directory: .
@@ -73,12 +82,55 @@ jobs:
       - name: Build responsive production image
         run: docker compose build
 
+  pocketbase:
+    name: PocketBase migration and sync flow
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Download PocketBase
+        working-directory: .
+        run: |
+          curl -fsSL -o pocketbase.zip https://github.com/pocketbase/pocketbase/releases/download/v0.39.10/pocketbase_0.39.10_linux_amd64.zip
+          unzip -q pocketbase.zip pocketbase
+          chmod +x pocketbase
+
+      - name: Apply migrations and start PocketBase
+        working-directory: .
+        run: |
+          ./pocketbase migrate up --migrationsDir=pb_migrations
+          ./pocketbase serve --http=127.0.0.1:8090 --migrationsDir=pb_migrations > pocketbase.log 2>&1 &
+          for attempt in {1..30}; do
+            curl -fsS http://127.0.0.1:8090/api/health && break
+            sleep 1
+          done
+
+      - name: Run registration and data recovery integration flow
+        env:
+          POCKETBASE_TEST_URL: http://127.0.0.1:8090
+        run: node tests/pocketbase-live.mjs
+
   release:
     name: Publish GitHub release packages
     if: startsWith(github.ref, 'refs/tags/v')
     needs:
       - web
       - compose
+      - pocketbase
     runs-on: ubuntu-latest
     permissions:
       contents: write

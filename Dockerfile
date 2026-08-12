@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-
 ARG NODE_VERSION=20.20.1
 FROM node:${NODE_VERSION}-alpine AS build
 

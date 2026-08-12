@@ -59,6 +59,14 @@ export function reviewWord(item, result, now = new Date()) {
   };
 }
 
+export function previewReviewSchedule(item, result, now = new Date()) {
+  const reviewed = reviewWord(item, result, now);
+  return {
+    intervalDays: reviewed.intervalDays,
+    nextReviewAt: reviewed.nextReviewAt,
+  };
+}
+
 export function speak(text) {
   if (!("speechSynthesis" in window)) return false;
   window.speechSynthesis.cancel();

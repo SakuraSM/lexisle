@@ -58,6 +58,9 @@ docker compose down
 - 可选 AI 语境识词：自定义任意 OpenAI 兼容接口、模型、API Key、词数和分析指令
 - AI 输出经过结构与原文校验；请求失败或跨域受限时自动回退本地分析
 - 重点词汇穿插在原文中，支持语境释义、发音和收藏
+- “自由阅读 / 阅读记词”双模式：稳定语义分段、逐段推进、任意单词查词和关键词高亮
+- 阅读记词模式支持 AI 段落翻译、语境丰富词义、手动加入生词本及桌面/移动端上下文详情面板
+- 逐段进度、翻译和同词不同语境详情会本地缓存，并通过 PocketBase `reader_json` 跨设备合并
 - 图书馆筛选、收藏、阅读进度与继续阅读
 - 新词 / 学习中 / 待复习 / 已掌握四种学习状态
 - SM-2 风格间隔复习、四档评分与复习事件记录
@@ -71,17 +74,29 @@ docker compose down
 - 版本化本地存储；云端集合不可用时仍可完整离线使用
 - 同一 Web 客户端内的响应式 PC / 移动导航与统一设计令牌
 
+PocketBase migration 位于 `pb_migrations/`，并已部署到 `https://pocket.nings.top`。界面会在集合不可用时明确显示“同步服务未配置”，不会把 404 或部分失败误报为成功；当前线上支持按更新时间合并、AI 分析同步、阅读记词缓存和跨设备软删除。
+
 ## 验证
 
-响应式 Web 已通过生产构建、学习算法单元测试和 Sites Worker 测试。视觉对照和交互验证记录见 `design-qa.md`。
+响应式 Web 已通过生产构建、31 项核心/同步测试、6 项 React 页面测试、4 项 Sites Worker 测试和 8 项桌面/移动端 Playwright 流程。构建预算为 5 MB，当前静态产物约 1.89 MB。视觉对照和交互验证记录见 `design-qa.md`。
 
-PocketBase 学习数据集合、字段、权限规则与索引建议见 `pocketbase-schema.md`。前端支持通过 `VITE_POCKETBASE_URL` 覆盖默认服务地址。
+PocketBase 学习数据集合由 `pb_migrations/1786464000_lexisle_learning_collections.js` 创建，阅读记词缓存字段由 `pb_migrations/1786550400_add_article_reader_json.js` 添加。前端支持通过 `VITE_POCKETBASE_URL` 覆盖默认服务地址。
+
+服务器不能直接运行 PocketBase CLI 时，可使用 Superuser Token 通过管理 API 幂等迁移：
+
+```bash
+POCKETBASE_SUPERUSER_TOKEN="..." \
+POCKETBASE_URL="https://pocket.nings.top" \
+npm --prefix web run migrate:pocketbase
+```
+
+Token 只通过环境变量传入，不要提交到仓库或打入 Web 构建产物。
 
 ## AI 模型配置
 
 在“设置 → AI 单词识别”中填写兼容 OpenAI Chat Completions 的 API Base URL、模型 ID 和 API Key。接口地址既可填写 `https://provider.example/v1`，也可填写完整的 `/chat/completions` 地址。
 
 - API Key 仅保存在当前浏览器的 Local Storage 或 Session Storage，不写入源码、构建产物或 PocketBase。
-- 英文文章只在用户启用 AI 且执行导入分析时发送到所配置的模型服务。
+- 英文文章只在用户启用 AI 并执行导入分析时发送全文；阅读记词模式只按需发送当前段落、相邻短上下文和目标词。
 - 静态 Web 会从浏览器直接调用模型接口，因此供应商必须允许当前站点跨域访问。
 - 未启用 AI、连接失败、超时或模型输出校验失败时，会自动使用本地规则识别。

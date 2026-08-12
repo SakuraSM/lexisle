@@ -1,4 +1,6 @@
-export const todayKey = new Date().toISOString().slice(0, 10);
+import { getLocalDateKey } from "../lib/date.js";
+
+const seedDateKey = getLocalDateKey();
 
 export const lexicon = {
   resilience: { phonetic: "/rɪˈzɪliəns/", part: "n.", definition: "恢复力；韧性", example: "Wildlife shows remarkable resilience in changing cities." },
@@ -22,7 +24,7 @@ export const seedArticles = [
     source: "Sleep Science Review",
     topic: "睡眠科学特辑",
     url: "https://example.com/deep-sleep",
-    image: "/assets/deep-sleep-bedroom.png",
+    image: "/assets/deep-sleep-bedroom.webp",
     difficulty: "中级",
     createdAt: "2026-08-12T06:32:00.000Z",
     saved: true,
@@ -39,7 +41,7 @@ When this system falters, the risk of cognitive decline may rise. The implicatio
     source: "Urban Nature",
     topic: "城市与野生动物",
     url: "https://example.com/urban-wildlife",
-    image: "/assets/urban-raccoon.png",
+    image: "/assets/urban-raccoon.webp",
     difficulty: "初级",
     createdAt: "2026-08-11T02:15:00.000Z",
     saved: false,
@@ -54,7 +56,7 @@ Their success does not mean urban life is easy. Noise, traffic, and artificial l
     source: "Ocean Weekly",
     topic: "海洋与生态",
     url: "https://example.com/coral-reefs",
-    image: "/assets/urban-raccoon.png",
+    image: "/assets/urban-raccoon.webp",
     difficulty: "中高级",
     createdAt: "2026-08-10T08:30:00.000Z",
     saved: true,
@@ -86,14 +88,14 @@ const initialVocabulary = [
 }));
 
 export const seedState = {
-  version: 1,
+  version: 3,
   articles: seedArticles,
   vocabulary: initialVocabulary,
   notes: [
     { id: "note-1", articleId: "deep-sleep", title: "深睡与记忆", body: "深睡不是被动休息，而是大脑执行清理与巩固记忆的阶段。", tags: ["睡眠", "记忆"], updatedAt: "2026-08-12T05:12:00.000Z" },
   ],
   plans: {
-    [todayKey]: { date: todayKey, readingTarget: 1, wordTarget: 5, reviewTarget: 8, readingDone: 0, wordDone: 1, reviewDone: 0 },
+    [seedDateKey]: { date: seedDateKey, readingTarget: 1, wordTarget: 5, reviewTarget: 8, readingDone: 0, wordDone: 1, reviewDone: 0, updatedAt: new Date().toISOString() },
   },
   reviewEvents: [],
   settings: {
@@ -102,9 +104,8 @@ export const seedState = {
     notifications: false,
     autoSaveWords: true,
     difficulty: "中级",
-    theme: "light",
     ai: { enabled: false, endpoint: "", model: "", maxWords: 12, prompt: "", rememberKey: false },
+    updatedAt: "2026-08-12T00:00:00.000Z",
   },
-  streak: 15,
-  lastStudyDate: todayKey,
+  tombstones: { articles: [], vocabulary: [], notes: [] },
 };

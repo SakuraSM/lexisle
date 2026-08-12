@@ -1,71 +1,123 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { seedState, todayKey } from "../data/seed.js";
+import { seedState } from "../data/seed.js";
+import { getLocalDateKey } from "./date.js";
 import { analyzeText, reviewWord } from "./learning.js";
-
-const STORAGE_KEY = "lexisle:data:v1";
+import { calculateReaderProgress, createReaderData } from "./reader.js";
+import { createDailyPlan, ensureDailyPlan, migrateState, STORAGE_KEY_V1, STORAGE_KEY_V2, STORAGE_KEY_V3 } from "./stateModel.js";
 
 function readState() {
   try {
-    const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "null");
-    if (stored?.version === 1) return {
-      ...seedState,
-      ...stored,
-      settings: { ...seedState.settings, ...stored.settings, ai: { ...seedState.settings.ai, ...stored.settings?.ai } },
-    };
+    const v3 = JSON.parse(window.localStorage.getItem(STORAGE_KEY_V3) || "null");
+    const v2 = JSON.parse(window.localStorage.getItem(STORAGE_KEY_V2) || "null");
+    const v1 = JSON.parse(window.localStorage.getItem(STORAGE_KEY_V1) || "null");
+    return migrateState(v3 || v2 || v1, seedState);
   } catch {
-    // Invalid user data is replaced by the recoverable seed below.
+    return migrateState(null, seedState);
   }
-  return structuredClone(seedState);
 }
 
 function uid(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+function updateTodayPlan(state, recipe, now = new Date()) {
+  const date = getLocalDateKey(now);
+  const current = ensureDailyPlan(state, date, now);
+  const plan = current.plans[date] || createDailyPlan(date, current.settings.dailyGoal, now);
+  return {
+    ...current,
+    plans: {
+      ...current.plans,
+      [date]: { ...recipe(plan), updatedAt: now.toISOString() },
+    },
+  };
+}
+
+function addTombstone(state, kind, record, now = new Date()) {
+  if (!record) return state;
+  const tombstone = { ...record, deletedAt: now.toISOString(), updatedAt: now.toISOString() };
+  return {
+    ...state,
+    tombstones: {
+      ...state.tombstones,
+      [kind]: [tombstone, ...state.tombstones[kind].filter((item) => item.id !== record.id)],
+    },
+  };
+}
+
 export function useLexisleStore() {
   const [state, setState] = useState(readState);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    window.localStorage.setItem(STORAGE_KEY_V3, JSON.stringify(state));
   }, [state]);
 
   const update = useCallback((recipe) => {
     setState((current) => recipe(current));
   }, []);
 
-  const addArticle = useCallback(({ title, source, url, text, difficulty = "中级", analysis }) => {
+  const replaceState = useCallback((nextState) => setState(migrateState(nextState, seedState)), []);
+
+  const ensureToday = useCallback((date = getLocalDateKey()) => {
+    update((current) => ensureDailyPlan(current, date));
+  }, [update]);
+
+  const addArticle = useCallback(({ title, source, url, text, difficulty, analysis }) => {
     const id = uid("article");
+    const now = new Date();
     const article = {
       id,
       title: title.trim() || "未命名英文文章",
       source: source || (url ? new URL(url).hostname.replace(/^www\./, "") : "手动粘贴"),
       topic: "自定义阅读",
       url: url || `local://${id}`,
-      image: "/assets/deep-sleep-bedroom.png",
+      image: "/assets/deep-sleep-bedroom.webp",
       difficulty,
-      createdAt: new Date().toISOString(),
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
       saved: false,
       progress: 0,
       text: text.trim(),
       analysis: analysis?.length ? analysis : undefined,
     };
+    article.readerData = createReaderData(article);
     const analyzed = article.analysis || analyzeText(article.text);
     update((current) => ({ ...current, articles: [article, ...current.articles] }));
     return { article, analyzed };
   }, [update]);
 
-  const toggleArticleSaved = useCallback((id) => update((current) => ({
-    ...current,
-    articles: current.articles.map((article) => article.id === id ? { ...article, saved: !article.saved } : article),
-  })), [update]);
-
-  const updateProgress = useCallback((id, progress) => update((current) => {
-    const plan = current.plans[todayKey] || seedState.plans[todayKey];
+  const toggleArticleSaved = useCallback((id) => update((current) => {
+    const updatedAt = new Date().toISOString();
     return {
       ...current,
-      articles: current.articles.map((article) => article.id === id ? { ...article, progress } : article),
-      plans: { ...current.plans, [todayKey]: { ...plan, readingDone: progress >= 100 ? Math.max(1, plan.readingDone) : plan.readingDone } },
+      articles: current.articles.map((article) => article.id === id ? { ...article, saved: !article.saved, updatedAt } : article),
     };
+  }), [update]);
+
+  const updateProgress = useCallback((id, progress) => update((current) => {
+    const now = new Date();
+    const wasComplete = current.articles.find((article) => article.id === id)?.progress >= 100;
+    const next = {
+      ...current,
+      articles: current.articles.map((article) => article.id === id ? { ...article, progress, readerData: { ...article.readerData, freeProgress: Math.max(article.readerData?.freeProgress || 0, progress), updatedAt: now.toISOString() }, updatedAt: now.toISOString() } : article),
+    };
+    if (progress < 100 || wasComplete) return ensureDailyPlan(next, getLocalDateKey(now), now);
+    return updateTodayPlan(next, (plan) => ({ ...plan, readingDone: plan.readingDone + 1 }), now);
+  }), [update]);
+
+  const updateReaderProgress = useCallback((id, readerPatch) => update((current) => {
+    const now = new Date();
+    const currentArticle = current.articles.find((article) => article.id === id);
+    if (!currentArticle) return current;
+    const readerData = createReaderData(currentArticle, { ...currentArticle.readerData, ...readerPatch, updatedAt: now.toISOString() });
+    const progress = Math.max(currentArticle.progress || 0, calculateReaderProgress(readerData));
+    const wasComplete = currentArticle.progress >= 100;
+    const next = {
+      ...current,
+      articles: current.articles.map((article) => article.id === id ? { ...article, readerData, progress, updatedAt: now.toISOString() } : article),
+    };
+    if (progress < 100 || wasComplete) return ensureDailyPlan(next, getLocalDateKey(now), now);
+    return updateTodayPlan(next, (plan) => ({ ...plan, readingDone: plan.readingDone + 1 }), now);
   }), [update]);
 
   const addVocabulary = useCallback((wordData, articleId) => {
@@ -76,6 +128,7 @@ export function useLexisleStore() {
         created = existing;
         return current;
       }
+      const now = new Date();
       created = {
         id: uid("vocab"),
         ...wordData,
@@ -84,28 +137,36 @@ export function useLexisleStore() {
         repetition: 0,
         intervalDays: 1,
         easeFactor: 2.5,
-        nextReviewAt: new Date(Date.now() + 86400000).toISOString(),
-        createdAt: new Date().toISOString(),
+        nextReviewAt: new Date(now.getTime() + 86400000).toISOString(),
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
       };
-      const plan = current.plans[todayKey] || seedState.plans[todayKey];
-      return { ...current, vocabulary: [created, ...current.vocabulary], plans: { ...current.plans, [todayKey]: { ...plan, wordDone: plan.wordDone + 1 } } };
+      return updateTodayPlan({ ...current, vocabulary: [created, ...current.vocabulary] }, (plan) => ({ ...plan, wordDone: plan.wordDone + 1 }), now);
     });
     return created;
   }, [update]);
 
-  const removeVocabulary = useCallback((id) => update((current) => ({ ...current, vocabulary: current.vocabulary.filter((item) => item.id !== id) })), [update]);
+  const removeVocabulary = useCallback((id) => update((current) => {
+    const record = current.vocabulary.find((item) => item.id === id);
+    return addTombstone({ ...current, vocabulary: current.vocabulary.filter((item) => item.id !== id) }, "vocabulary", record);
+  }), [update]);
+
+  const deleteArticle = useCallback((id) => update((current) => {
+    const record = current.articles.find((item) => item.id === id);
+    return addTombstone({ ...current, articles: current.articles.filter((item) => item.id !== id) }, "articles", record);
+  }), [update]);
 
   const recordReview = useCallback((id, result, responseMs) => update((current) => {
     const item = current.vocabulary.find((word) => word.id === id);
     if (!item) return current;
-    const reviewed = reviewWord(item, result);
-    const plan = current.plans[todayKey] || seedState.plans[todayKey];
-    return {
+    const now = new Date();
+    const reviewed = { ...reviewWord(item, result, now), updatedAt: now.toISOString() };
+    const event = { id: uid("review"), vocabularyId: id, result, responseMs, reviewedAt: now.toISOString(), updatedAt: now.toISOString() };
+    return updateTodayPlan({
       ...current,
       vocabulary: current.vocabulary.map((word) => word.id === id ? reviewed : word),
-      reviewEvents: [{ id: uid("review"), vocabularyId: id, result, responseMs, reviewedAt: new Date().toISOString() }, ...current.reviewEvents],
-      plans: { ...current.plans, [todayKey]: { ...plan, reviewDone: plan.reviewDone + 1 } },
-    };
+      reviewEvents: [event, ...current.reviewEvents],
+    }, (plan) => ({ ...plan, reviewDone: plan.reviewDone + 1 }), now);
   }), [update]);
 
   const saveNote = useCallback((note) => update((current) => {
@@ -114,11 +175,42 @@ export function useLexisleStore() {
     return { ...current, notes: exists ? current.notes.map((item) => item.id === next.id ? next : item) : [next, ...current.notes] };
   }), [update]);
 
-  const deleteNote = useCallback((id) => update((current) => ({ ...current, notes: current.notes.filter((note) => note.id !== id) })), [update]);
-  const updatePlan = useCallback((plan) => update((current) => ({ ...current, plans: { ...current.plans, [plan.date]: plan } })), [update]);
-  const updateSettings = useCallback((settings) => update((current) => ({ ...current, settings: { ...current.settings, ...settings } })), [update]);
-  const replaceFromCloud = useCallback((cloud) => update((current) => ({ ...current, ...cloud, settings: { ...current.settings, ...cloud.settings, ai: { ...current.settings.ai, ...cloud.settings?.ai } } })), [update]);
+  const deleteNote = useCallback((id) => update((current) => {
+    const record = current.notes.find((note) => note.id === id);
+    return addTombstone({ ...current, notes: current.notes.filter((note) => note.id !== id) }, "notes", record);
+  }), [update]);
 
-  const actions = useMemo(() => ({ addArticle, toggleArticleSaved, updateProgress, addVocabulary, removeVocabulary, recordReview, saveNote, deleteNote, updatePlan, updateSettings, replaceFromCloud }), [addArticle, toggleArticleSaved, updateProgress, addVocabulary, removeVocabulary, recordReview, saveNote, deleteNote, updatePlan, updateSettings, replaceFromCloud]);
+  const updatePlan = useCallback((plan) => update((current) => ({
+    ...current,
+    plans: { ...current.plans, [plan.date]: { ...plan, updatedAt: new Date().toISOString() } },
+  })), [update]);
+
+  const updateSettings = useCallback((settings) => update((current) => ({
+    ...current,
+    settings: {
+      ...current.settings,
+      ...settings,
+      ai: { ...current.settings.ai, ...settings.ai },
+      updatedAt: new Date().toISOString(),
+    },
+  })), [update]);
+
+  const actions = useMemo(() => ({
+    addArticle,
+    addVocabulary,
+    deleteArticle,
+    deleteNote,
+    ensureToday,
+    recordReview,
+    removeVocabulary,
+    replaceState,
+    saveNote,
+    toggleArticleSaved,
+    updatePlan,
+    updateProgress,
+    updateReaderProgress,
+    updateSettings,
+  }), [addArticle, addVocabulary, deleteArticle, deleteNote, ensureToday, recordReview, removeVocabulary, replaceState, saveNote, toggleArticleSaved, updatePlan, updateProgress, updateReaderProgress, updateSettings]);
+
   return { state, actions };
 }

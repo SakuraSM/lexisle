@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowRightIcon, BookmarkFilledIcon, BookmarkIcon, Link2Icon, ReaderIcon } from "@radix-ui/react-icons";
+import { ArrowRightIcon, BookmarkFilledIcon, BookmarkIcon, Link2Icon, ReaderIcon, TrashIcon } from "@radix-ui/react-icons";
 import { analyzeText } from "../lib/learning.js";
 import { analyzeVocabularyWithAi, readAiApiKey } from "../lib/aiVocabulary.js";
 import { EmptyState, PageHeader, ProgressMeter } from "./PagePrimitives.jsx";
@@ -8,21 +8,25 @@ function cleanReaderText(raw) {
   return raw.replace(/^Title:.*$/gm, "").replace(/^URL Source:.*$/gm, "").replace(/^Markdown Content:.*$/gm, "").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/^#{1,6}\s+/gm, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-export function LibraryPage({ state, actions, openArticle, notify }) {
+export function LibraryPage({ state, actions, openArticle, navigate, notify }) {
   const [mode, setMode] = useState("url");
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
-  const [difficulty, setDifficulty] = useState("全部");
+  const [difficultyFilter, setDifficultyFilter] = useState("全部");
+  const [importDifficulty, setImportDifficulty] = useState(state.settings.difficulty);
   const [savedOnly, setSavedOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [analysisNotice, setAnalysisNotice] = useState("");
+  const [confirmArticleId, setConfirmArticleId] = useState("");
 
-  const articles = useMemo(() => state.articles.filter((article) => (!savedOnly || article.saved) && (difficulty === "全部" || article.difficulty === difficulty)), [state.articles, savedOnly, difficulty]);
+  const articles = useMemo(() => state.articles.filter((article) => (!savedOnly || article.saved) && (difficultyFilter === "全部" || article.difficulty === difficultyFilter)), [state.articles, savedOnly, difficultyFilter]);
 
   const importArticle = async (event) => {
     event.preventDefault();
     setError("");
+    setAnalysisNotice("");
     setBusy(true);
     try {
       let articleText = text.trim();
@@ -45,9 +49,10 @@ export function LibraryPage({ state, actions, openArticle, notify }) {
           analysisMode = `AI · ${state.settings.ai.model}`;
         } catch (aiError) {
           aiFallbackReason = aiError.message;
+          setAnalysisNotice(`AI 分析未完成，已使用本地识别：${aiError.message}`);
         }
       }
-      const { article, analyzed } = actions.addArticle({ title: articleTitle, url: mode === "url" ? url : "", text: articleText, difficulty: difficulty === "全部" ? "中级" : difficulty, analysis: aiAnalysis });
+      const { article, analyzed } = actions.addArticle({ title: articleTitle, url: mode === "url" ? url : "", text: articleText, difficulty: importDifficulty, analysis: aiAnalysis });
       notify(`${analysisMode} 分析完成：识别到 ${analyzed.length} 个重点词汇${aiFallbackReason ? `；AI 未使用：${aiFallbackReason}` : ""}`);
       openArticle(article.id);
       setUrl(""); setTitle(""); setText("");
@@ -67,18 +72,20 @@ export function LibraryPage({ state, actions, openArticle, notify }) {
             <div className="section-heading"><div><h2>导入英文文章</h2><p>链接读取或直接粘贴原文 · {state.settings.ai?.enabled ? `AI ${state.settings.ai.model || "待配置"}` : "本地识别"}</p></div><ReaderIcon /></div>
             <div className="segmented-control"><button className={mode === "url" ? "is-active" : ""} type="button" onClick={() => setMode("url")}>粘贴文章链接</button><button className={mode === "text" ? "is-active" : ""} type="button" onClick={() => setMode("text")}>粘贴英文原文</button></div>
             <form className="import-form" onSubmit={importArticle}>
-              {mode === "url" ? <label className="url-field"><Link2Icon /><input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/english-article" /></label> : <><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="文章标题" /><textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="在这里粘贴完整英文文章……" rows="6" /></>}
+              {mode === "url" ? <label className="url-field"><span className="sr-only">英文文章链接</span><Link2Icon /><input aria-label="英文文章链接" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/english-article" /></label> : <><label className="sr-only" htmlFor="article-title">文章标题</label><input id="article-title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="文章标题" /><label className="sr-only" htmlFor="article-text">英文文章原文</label><textarea id="article-text" value={text} onChange={(event) => setText(event.target.value)} placeholder="在这里粘贴完整英文文章……" rows="6" /></>}
+              <label className="import-difficulty"><span>导入难度</span><select value={importDifficulty} onChange={(event) => setImportDifficulty(event.target.value)}><option>初级</option><option>中级</option><option>中高级</option><option>高级</option></select></label>
               {error ? <p className="form-error" role="alert">{error}</p> : null}
+              {analysisNotice ? <div className="recovery-notice" role="status"><span>{analysisNotice}</span><button type="button" onClick={() => navigate("设置")}>检查 AI 设置</button></div> : null}
               <button className="primary-button" type="submit" disabled={busy}>{busy ? "正在读取并分析…" : "开始分析"}<ArrowRightIcon /></button>
             </form>
           </section>
 
           <section className="article-library open-panel">
             <div className="section-heading"><div><h2>{savedOnly ? "已收藏" : "最近阅读"}</h2><p>{articles.length} 篇文章</p></div><button type="button" onClick={() => setSavedOnly((value) => !value)}>{savedOnly ? "查看全部" : "只看收藏"}</button></div>
-            <div className="filter-row"><span>难度</span>{["全部", "初级", "中级", "中高级", "高级"].map((level) => <button key={level} className={difficulty === level ? "is-active" : ""} type="button" onClick={() => setDifficulty(level)}>{level}</button>)}</div>
+            <div className="filter-row"><span>难度</span>{["全部", "初级", "中级", "中高级", "高级"].map((level) => <button key={level} className={difficultyFilter === level ? "is-active" : ""} type="button" onClick={() => setDifficultyFilter(level)}>{level}</button>)}</div>
             {articles.length ? <div className="article-list">{articles.map((article) => {
               const analyzed = article.analysis?.length ? article.analysis : analyzeText(article.text);
-              return <article key={article.id}><img src={article.image} alt="" /><div><h3>{article.title}</h3><p>{new Date(article.createdAt).toLocaleDateString("zh-CN")} · {article.text.split(/\s+/).length} 词 · 生词 {analyzed.length} 个 · {article.difficulty}</p><ProgressMeter value={article.progress} max={100} /></div><button className="icon-button" type="button" aria-label={article.saved ? "取消收藏" : "收藏"} onClick={() => actions.toggleArticleSaved(article.id)}>{article.saved ? <BookmarkFilledIcon /> : <BookmarkIcon />}</button><button className="secondary-button" type="button" onClick={() => openArticle(article.id)}>{article.progress ? "继续阅读" : "开始阅读"}<ArrowRightIcon /></button></article>;
+              return <article key={article.id}><img src={article.image} alt="" /><div><h3>{article.title}</h3><p>{new Date(article.createdAt).toLocaleDateString("zh-CN")} · {article.text.split(/\s+/).length} 词 · 生词 {analyzed.length} 个 · {article.difficulty}</p><ProgressMeter value={article.progress} max={100} />{confirmArticleId === article.id ? <div className="article-delete-confirm" role="alert"><span>删除后会同步到其他设备</span><button type="button" onClick={() => setConfirmArticleId("")}>取消</button><button type="button" className="danger-link" onClick={() => { actions.deleteArticle(article.id); setConfirmArticleId(""); }}>确认删除</button></div> : null}</div><div className="article-row-actions"><button className="icon-button" type="button" aria-label={article.saved ? "取消收藏" : "收藏"} onClick={() => actions.toggleArticleSaved(article.id)}>{article.saved ? <BookmarkFilledIcon /> : <BookmarkIcon />}</button><button className="icon-button" type="button" aria-label={`删除文章 ${article.title}`} onClick={() => setConfirmArticleId(article.id)}><TrashIcon /></button></div><button className="secondary-button" type="button" onClick={() => openArticle(article.id)}>{article.progress ? "继续阅读" : "开始阅读"}<ArrowRightIcon /></button></article>;
             })}</div> : <EmptyState title="暂无符合条件的文章" description="调整筛选条件或导入一篇新的英文文章。" />}
           </section>
         </div>
