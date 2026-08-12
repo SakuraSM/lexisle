@@ -1,8 +1,8 @@
-name: zhiyu-english
+name: lexisle
 
 services:
   desktop:
-    image: zhiyu-english-desktop:local
+    image: lexisle-desktop:local
     build:
       context: .
       dockerfile: Dockerfile
@@ -14,7 +14,7 @@ services:
     restart: unless-stopped
 
   mobile:
-    image: zhiyu-english-mobile:local
+    image: lexisle-mobile:local
     build:
       context: .
       dockerfile: Dockerfile

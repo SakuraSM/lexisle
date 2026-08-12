@@ -56,13 +56,13 @@ jobs:
 
       - name: Package static bundle
         working-directory: .
-        run: tar -C "${{ matrix.app }}/dist/client" -czf "zhiyu-english-${{ matrix.app }}.tar.gz" .
+        run: tar -C "${{ matrix.app }}/dist/client" -czf "lexisle-${{ matrix.app }}.tar.gz" .
 
       - name: Upload package
         uses: actions/upload-artifact@v7
         with:
-          name: zhiyu-english-${{ matrix.app }}
-          path: zhiyu-english-${{ matrix.app }}.tar.gz
+          name: lexisle-${{ matrix.app }}
+          path: lexisle-${{ matrix.app }}.tar.gz
           if-no-files-found: error
           retention-days: 14
 

@@ -1,4 +1,4 @@
-# 知屿英语双端原型
+# Lexisle · 知屿英语双端原型
 
 “知屿英语”把在线英文文章变成可持续的词汇学习路径：PC 端用于沉浸阅读、语境释义与记忆轨迹，移动端用于短回合练习、即时反馈和每日计划。
 
@@ -44,8 +44,8 @@ docker compose down
 
 工作流会分别安装、构建、测试 PC 与移动端，执行 Docker Compose 双镜像构建，并上传：
 
-- `zhiyu-english-desktop.tar.gz`
-- `zhiyu-english-mobile.tar.gz`
+- `lexisle-desktop.tar.gz`
+- `lexisle-mobile.tar.gz`
 
 构建产物保留 14 天。推送版本标签（例如 `v1.0.0`）时，还会自动创建 GitHub Release 并附带两个压缩包。
 
