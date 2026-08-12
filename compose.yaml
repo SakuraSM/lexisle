@@ -1,0 +1,26 @@
+name: zhiyu-english
+
+services:
+  desktop:
+    image: zhiyu-english-desktop:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_DIR: desktop
+        VITE_POCKETBASE_URL: ${VITE_POCKETBASE_URL:-https://pocket.nings.top}
+    ports:
+      - "${DESKTOP_PORT:-4173}:80"
+    restart: unless-stopped
+
+  mobile:
+    image: zhiyu-english-mobile:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_DIR: mobile
+        VITE_POCKETBASE_URL: ${VITE_POCKETBASE_URL:-https://pocket.nings.top}
+    ports:
+      - "${MOBILE_PORT:-4174}:80"
+    restart: unless-stopped

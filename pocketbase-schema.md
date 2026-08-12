@@ -1,0 +1,79 @@
+# PocketBase 数据设计
+
+服务地址：`https://pocket.nings.top`
+
+前端当前使用 `users` 认证集合完成邮箱密码登录、注册、退出与会话恢复。以下集合用于把文章进度、单词记忆和每日计划从匿名本地状态迁移到登录账号。
+
+## 1. users（Auth collection）
+
+保留 PocketBase 认证字段。可选增加：
+
+- `name`：text，显示昵称
+- `timezone`：text，默认 `Asia/Shanghai`
+- `daily_goal`：number，默认 `5`
+
+不要在前端保存 PocketBase 超级管理员凭证。
+
+## 2. vocabulary_items
+
+- `user`：relation → users，required，单选
+- `word`：text，required
+- `phonetic`：text
+- `definition_zh`：text，required
+- `context`：editor
+- `article_url`：url
+- `status`：select，`new / learning / review / mastered`
+- `next_review_at`：date
+- `repetition`：number，默认 0
+- `interval_days`：number，默认 1
+- `ease_factor`：number，默认 2.5
+
+唯一索引：`CREATE UNIQUE INDEX idx_vocab_user_word ON vocabulary_items (user, word)`
+
+## 3. reading_progress
+
+- `user`：relation → users，required，单选
+- `article_url`：url，required
+- `article_title`：text
+- `progress`：number，0–100
+- `last_position`：text
+- `saved_for_later`：bool
+
+唯一索引：`CREATE UNIQUE INDEX idx_reading_user_article ON reading_progress (user, article_url)`
+
+## 4. daily_plans
+
+- `user`：relation → users，required，单选
+- `date`：date，required
+- `reading_target`：number，默认 1
+- `word_target`：number，默认 5
+- `review_target`：number，默认 8
+- `reading_done`：number，默认 0
+- `word_done`：number，默认 0
+- `review_done`：number，默认 0
+
+唯一索引：`CREATE UNIQUE INDEX idx_plan_user_date ON daily_plans (user, date)`
+
+## 5. review_events
+
+- `user`：relation → users，required，单选
+- `vocabulary_item`：relation → vocabulary_items，required，单选
+- `result`：select，`again / hard / good / easy`
+- `reviewed_at`：date，required
+- `response_ms`：number
+
+## API Rules
+
+对 `vocabulary_items`、`reading_progress`、`daily_plans` 使用：
+
+- List/View/Update/Delete：`@request.auth.id != "" && user = @request.auth.id`
+- Create：`@request.auth.id != "" && @request.body.user = @request.auth.id`
+
+对 `review_events` 使用同样的 List/View/Create 规则；如果不允许修改复习历史，将 Update/Delete 留空。
+
+## 接入顺序
+
+1. 在 PocketBase 管理后台创建上述集合、索引和规则。
+2. 使用当前登录用户 ID 写入每条记录的 `user` 字段。
+3. 首次登录时把匿名本地进度合并到账号；同一文章或单词以唯一索引进行 upsert。
+4. 单词作答后写入 `review_events`，同时更新 `vocabulary_items.next_review_at`。
