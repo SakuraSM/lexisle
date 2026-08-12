@@ -18,17 +18,11 @@ concurrency:
 
 jobs:
   web:
-    name: Build ${{ matrix.app }}
+    name: Build responsive web
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        app:
-          - desktop
-          - mobile
     defaults:
       run:
-        working-directory: ${{ matrix.app }}
+        working-directory: web
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -38,13 +32,10 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+          cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-
-      - name: Check protected runtime
-        run: npm run check:runtime --if-present
 
       - name: Build production bundle
         env:
@@ -56,13 +47,13 @@ jobs:
 
       - name: Package static bundle
         working-directory: .
-        run: tar -C "${{ matrix.app }}/dist/client" -czf "lexisle-${{ matrix.app }}.tar.gz" .
+        run: tar -C "web/dist/client" -czf "lexisle-web.tar.gz" .
 
       - name: Upload package
         uses: actions/upload-artifact@v7
         with:
-          name: lexisle-${{ matrix.app }}
-          path: lexisle-${{ matrix.app }}.tar.gz
+          name: lexisle-web
+          path: lexisle-web.tar.gz
           if-no-files-found: error
           retention-days: 14
 
@@ -76,7 +67,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build both production images
+      - name: Build responsive production image
         run: docker compose build
 
   release:

@@ -3,14 +3,13 @@
 ARG NODE_VERSION=20.20.1
 FROM node:${NODE_VERSION}-alpine AS build
 
-ARG APP_DIR
 ARG VITE_POCKETBASE_URL=https://pocket.nings.top
 WORKDIR /app
 
-COPY ${APP_DIR}/package.json ${APP_DIR}/package-lock.json ./
+COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-COPY ${APP_DIR}/ ./
+COPY web/ ./
 ENV VITE_POCKETBASE_URL=${VITE_POCKETBASE_URL}
 RUN npm run build
 

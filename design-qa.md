@@ -1,23 +1,28 @@
-# Design QA — 知屿英语双端原型
+# Design QA — Lexisle 响应式 Web
+
+## Responsive consolidation
+
+- 单一工程：`web/`
+- 单一 URL：宽屏呈现阅读工作台，窄屏呈现移动学习任务
+- 单一认证状态：两种布局共用同一个 PocketBase client 和 auth store
+- 单一构建产物：`lexisle-web.tar.gz`
+- 断点：`820px`
+- 原有 PC 与移动视觉目标均保留，变化仅限实现架构与真实响应式容器
 
 ## Comparison targets
 
 ### Desktop
 
-- Source visual truth: `/Users/zhengningning/Documents/Codex/2026-08-12/product-design-plugin-product-design-openai/outputs/zhiyu-english/desktop/reference-desktop.png`
-- Normalized source: `/Users/zhengningning/Documents/Codex/2026-08-12/product-design-plugin-product-design-openai/outputs/zhiyu-english/desktop/reference-desktop-normalized.png`
-- Browser-rendered implementation: `/Users/zhengningning/Documents/Codex/2026-08-12/product-design-plugin-product-design-openai/outputs/zhiyu-english/desktop/implementation-desktop.jpg`
-- Side-by-side evidence: `/Users/zhengningning/Documents/Codex/2026-08-12/product-design-plugin-product-design-openai/outputs/zhiyu-english/desktop/qa-comparison-desktop.png`
+- Source visual truth: `web/reference-desktop-normalized.png`
+- Browser-rendered responsive implementation: `web/qa-responsive-desktop.png`
 - Source pixels: 1487 × 1058; normalized to 1440 × 1024.
 - Implementation viewport and pixels: 1440 × 1024 CSS px, deviceScaleFactor 1, 1440 × 1024 screenshot.
 - State: Today / reading workspace / `cortex` expanded / 28% article progress.
 
 ### Mobile
 
-- Source visual truth: `/Users/zhengningning/Documents/Codex/2026-08-12/product-design-plugin-product-design-openai/outputs/zhiyu-english/mobile/reference-mobile.png`
-- Normalized source: `/Users/zhengningning/Documents/Codex/2026-08-12/product-design-plugin-product-design-openai/outputs/zhiyu-english/mobile/reference-mobile-normalized.png`
-- Browser-rendered implementation: `/Users/zhengningning/Documents/Codex/2026-08-12/product-design-plugin-product-design-openai/outputs/zhiyu-english/mobile/implementation-mobile.jpg`
-- Side-by-side evidence: `/Users/zhengningning/Documents/Codex/2026-08-12/product-design-plugin-product-design-openai/outputs/zhiyu-english/mobile/qa-comparison-mobile.png`
+- Source visual truth: `web/reference-mobile-normalized.png`
+- Browser-rendered responsive implementation: `web/qa-responsive-mobile.png`
 - Source pixels: 853 × 1844; normalized to 393 × 852 to match the app viewport.
 - Implementation viewport and pixels: `[data-testid="device-screen"]` measured 393 × 852 CSS px, deviceScaleFactor 1, content screenshot 393 × 852.
 - State: Today / lesson 1 of 5 / contextual multiple-choice question. Correct-feedback state was tested separately through the live interaction.
@@ -76,5 +81,19 @@
 
 - [P3] The mobile runtime’s protected status bar reduces vertical space compared with the frame-free generated mock, so the correct-feedback panel appears after the answer action rather than in the initial static viewport.
 - [P3] The desktop implementation keeps slightly more white space below the final paragraph than the generated source; this improves reading calm without changing the task hierarchy.
+
+## Responsive fidelity ledger
+
+- Copy: learning prompt, article context, word definition and answer choices remain unchanged; only the product mark changes from “知屿英语” to “Lexisle”.
+- Layout: wide screens retain sidebar + article + memory trail; narrow screens retain daily goal + contextual question + answer stack.
+- Typography: Noto Sans SC remains the product font and Source Serif 4 remains the article font.
+- Palette: violet, deep indigo, amber, teal and mist gray tokens remain shared.
+- Assets: the same bedroom and raccoon raster assets are reused without new cropping or placeholders.
+- Interaction: article word selection, reading progress, mobile answer feedback and the shared PocketBase login flow were verified in the in-app browser.
+- Native-width check: mobile layout was inspected at 393px content width. The browser surface exposed a 720px-high capture rather than the 852px source height; vertical continuation was verified by scrolling.
+- Above-the-fold copy diff: only the intentional brand rename to Lexisle remains.
+- Intentional deviation: the phone simulator frame and simulated keyboard were removed because this is now a real responsive website rather than an app mock.
+
+No actionable P0, P1 or P2 visual mismatch remains.
 
 final result: passed
