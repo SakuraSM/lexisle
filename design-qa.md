@@ -42,7 +42,7 @@
 ## Required fidelity surfaces
 
 - Fonts and typography: Noto Sans SC is used for product UI and Source Serif 4 for article content on both surfaces. Weight, line height, wrapping, and hierarchy follow the selected mocks; no truncation was found.
-- Spacing and layout rhythm: 14px primary radii, 10px secondary radii, restrained borders, and consistent surface spacing are shared across both apps. The mobile first pass was too loose and was compacted before the final comparison.
+- Spacing and layout rhythm: 14px primary radii, 10px secondary radii, restrained borders, and consistent surface spacing are shared across responsive layouts. The mobile first pass was too loose and was compacted before the final comparison.
 - Colors and visual tokens: electric violet `#5B3FF2`, deep indigo `#171B3A`, amber `#F59E0B`, success teal `#16A085`, mist gray `#F6F7FB`, and divider `#E5E7F0` are consistent across both implementations.
 - Image quality and asset fidelity: both article images are purpose-generated raster assets with matching editorial art direction, correct subject, sharp crop, and no transparency artifacts. Standard controls use Radix outline icons.
 - Copy and content: article titles, sentences, Chinese meanings, statuses, daily plan, dates, and review timing match the selected concepts and August 12, 2026 anchor.
@@ -97,3 +97,33 @@
 No actionable P0, P1 or P2 visual mismatch remains.
 
 final result: passed
+
+## Complete product pass — 2026-08-12
+
+- New design spec: `web/library-concept.png`.
+- Latest browser renders: `web/qa-complete-desktop.png` and `web/qa-complete-mobile.png`.
+- Browser method: production Docker image at `http://127.0.0.1:4173`, controlled with the in-app Browser; mobile viewport override set to 393 × 852 and reset after verification.
+- `view_image` comparison inspected the generated library concept, final desktop render, and final 393 × 852 mobile render in one QA pass.
+
+### Fidelity ledger
+
+- Copy: “图书馆 / 导入英文文章 / 粘贴文章链接 / 粘贴英文原文 / 开始分析 / 最近阅读 / 难度 / 继续阅读” is preserved. The right-side concept label “导入历史” intentionally became “分析能力” because file-import history is not part of the approved URL/text workflow.
+- Layout: sidebar, weekly header, open primary workspace, article rail, and narrow right panel match the concept structure; the mobile render collapses these into one readable column.
+- Typography: Noto Sans SC remains the UI font and Source Serif 4 remains exclusive to English reading content; no browser-default control typography is visible.
+- Palette: true white surfaces, mist gray canvas, `#5B3FF2` violet, deep indigo, amber, teal, and `#E5E7F0` borders match the concept and original reading screen.
+- Components and spacing: 14px panels, restrained one-pixel borders, 10px controls, open lists, and continuous rails are reused across all seven destinations without generic card-grid drift.
+- Responsive behavior: at 393 × 852 the desktop sidebar/topbar are hidden, the mobile header and six-item bottom navigation are visible, primary controls are full-width, and no horizontal overflow was found.
+- Above-the-fold copy diff: no unplanned headline, navigation, or CTA changes remain; the product mark is intentionally Lexisle.
+
+### Interaction verification
+
+- All seven navigation destinations rendered their matching level-one heading; browser console errors: 0.
+- Pasted a 60-word article, analyzed 11 highlighted words, opened the contextual inspector, and saved `photosynthesis` to the vocabulary book.
+- Revealed a review answer, submitted a memory grade, and observed today’s review count increment.
+- Changed the word target from 5 to 7 in the daily plan and observed the topbar update.
+- Created and saved the note “语境学习方法”, then verified it appeared in the notes rail.
+- Existing login/registration/session flow remains connected to PocketBase; anonymous data remained available across a production-page reload.
+
+Intentional implementation limit: third-party article URL extraction uses the public Jina Reader endpoint and therefore depends on that service and the source site allowing access. Direct English-text paste remains fully local and is the reliable fallback.
+
+No actionable P0, P1 or P2 visual or interaction mismatch remains. The implementation was faithfully verified against the accepted Lexisle design system and the generated library design spec.

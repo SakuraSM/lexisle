@@ -42,6 +42,9 @@ jobs:
           VITE_POCKETBASE_URL: https://pocket.nings.top
         run: npm run build
 
+      - name: Test learning logic
+        run: npm test
+
       - name: Test Sites worker
         run: npm run test:sites
 

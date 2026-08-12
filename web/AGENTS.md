@@ -3,6 +3,8 @@
 ## Product decision (2026-08-12)
 
 - This is one responsive Web client: wide screens use immersive article reading and memory trails, while narrow screens use short contextual vocabulary challenges.
+- All navigation destinations are functional product pages in the same client: Today, Library, Review, Vocabulary, Notes, Insights, and Settings. Mobile uses the same data and workflows through a compact header and bottom navigation.
+- Article ingestion supports URL reading through the public Jina Reader endpoint plus a fully local pasted-text fallback. Vocabulary analysis and spaced repetition remain deterministic and usable offline.
 - Both surfaces share electric violet `#5B3FF2`, deep indigo `#171B3A`, amber `#F59E0B`, success teal `#16A085`, mist gray `#F6F7FB`, and the states `新词 / 学习中 / 待复习`.
 - Authentication uses PocketBase at `https://pocket.nings.top`, the `users` auth collection, and email/password. Keep login, registration, logout, session restoration, and service errors shared across all responsive layouts.
 

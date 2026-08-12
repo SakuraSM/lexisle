@@ -19,8 +19,10 @@
 - `user`：relation → users，required，单选
 - `word`：text，required
 - `phonetic`：text
+- `part`：text
 - `definition_zh`：text，required
 - `context`：editor
+- `article_id`：text
 - `article_url`：url
 - `status`：select，`new / learning / review / mastered`
 - `next_review_at`：date
@@ -57,14 +59,56 @@
 ## 5. review_events
 
 - `user`：relation → users，required，单选
+- `client_id`：text，required，用于离线事件去重
 - `vocabulary_item`：relation → vocabulary_items，required，单选
 - `result`：select，`again / hard / good / easy`
 - `reviewed_at`：date，required
 - `response_ms`：number
 
+唯一索引：`CREATE UNIQUE INDEX idx_review_user_client ON review_events (user, client_id)`
+
+## 6. articles
+
+- `user`：relation → users，required，单选
+- `client_id`：text，required
+- `title`：text，required
+- `source`：text
+- `topic`：text
+- `url`：url
+- `image`：url
+- `difficulty`：select，`初级 / 中级 / 中高级 / 高级`
+- `saved`：bool
+- `progress`：number，0–100
+- `text`：editor，required
+
+唯一索引：`CREATE UNIQUE INDEX idx_article_user_client ON articles (user, client_id)`
+
+## 7. notes
+
+- `user`：relation → users，required，单选
+- `client_id`：text，required
+- `article_id`：text
+- `title`：text，required
+- `body`：editor
+- `tags`：json
+
+唯一索引：`CREATE UNIQUE INDEX idx_note_user_client ON notes (user, client_id)`
+
+## 8. user_settings
+
+- `user`：relation → users，required，单选
+- `daily_goal`：number
+- `reminder_time`：text
+- `notifications`：bool
+- `auto_save_words`：bool
+- `difficulty`：select，`初级 / 中级 / 中高级 / 高级`
+- `theme`：select，当前使用 `light`
+
+唯一索引：`CREATE UNIQUE INDEX idx_settings_user ON user_settings (user)`
+
 ## API Rules
 
-对 `vocabulary_items`、`reading_progress`、`daily_plans` 使用：
+对 `vocabulary_items`、`reading_progress`、`daily_plans`、`articles`、`notes`、`user_settings` 使用：
 
 - List/View/Update/Delete：`@request.auth.id != "" && user = @request.auth.id`
 - Create：`@request.auth.id != "" && @request.body.user = @request.auth.id`
