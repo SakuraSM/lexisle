@@ -31,5 +31,5 @@ export function SearchField({ value, onChange, placeholder }) {
 
 export function ProgressMeter({ value, max, tone = "primary" }) {
   const ratio = max ? Math.min(100, Math.round((value / max) * 100)) : 0;
-  return <div className={`meter tone-${tone}`} aria-label={`${value}/${max}`}><i style={{ width: `${ratio}%` }} /></div>;
+  return <div className={`meter tone-${tone}`} role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax={max} aria-valuenow={Math.min(value, max)} aria-valuetext={`${value}/${max}`}><i style={{ width: `${ratio}%` }} /></div>;
 }
