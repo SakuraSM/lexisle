@@ -31,10 +31,10 @@ jobs:
         working-directory: ${{ matrix.app }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -59,7 +59,7 @@ jobs:
         run: tar -C "${{ matrix.app }}/dist/client" -czf "zhiyu-english-${{ matrix.app }}.tar.gz" .
 
       - name: Upload package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: zhiyu-english-${{ matrix.app }}
           path: zhiyu-english-${{ matrix.app }}.tar.gz
@@ -71,10 +71,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build both production images
         run: docker compose build
@@ -90,7 +90,7 @@ jobs:
       contents: write
     steps:
       - name: Download packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
