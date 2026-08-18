@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ArrowRightIcon, BookmarkFilledIcon, BookmarkIcon, Link2Icon, ReaderIcon, TrashIcon } from "@radix-ui/react-icons";
 import { analyzeText } from "../lib/learning.js";
-import { analyzeVocabularyWithAi, readAiApiKey } from "../lib/aiVocabulary.js";
+import { analyzeVocabularyWithAi } from "../lib/aiVocabulary.js";
 import { EmptyState, PageHeader, ProgressMeter } from "./PagePrimitives.jsx";
 
 function cleanReaderText(raw) {
@@ -45,7 +45,7 @@ export function LibraryPage({ state, actions, openArticle, navigate, notify }) {
       let aiFallbackReason = "";
       if (state.settings.ai?.enabled) {
         try {
-          aiAnalysis = await analyzeVocabularyWithAi(state.settings.ai, articleText, readAiApiKey());
+          aiAnalysis = await analyzeVocabularyWithAi(state.settings.ai, articleText);
           analysisMode = `AI · ${state.settings.ai.model}`;
         } catch (aiError) {
           aiFallbackReason = aiError.message;
@@ -92,7 +92,7 @@ export function LibraryPage({ state, actions, openArticle, navigate, notify }) {
         <aside className="library-aside open-panel">
           <h2>分析能力</h2>
           <ol><li><strong>1</strong><div><b>清理文章正文</b><span>去除导航、图片链接和多余格式</span></div></li><li><strong>2</strong><div><b>{state.settings.ai?.enabled ? "AI 语境识词" : "本地识别词汇"}</b><span>{state.settings.ai?.enabled ? "由自定义模型分析难度、释义和原句" : "结合词频、词长和内置学习词典"}</span></div></li><li><strong>3</strong><div><b>生成复习计划</b><span>收藏后按记忆曲线安排复习</span></div></li></ol>
-          <p>AI 配置保存在当前浏览器；接口不可用时自动回退本地识别，不阻塞文章导入。</p>
+          <p>AI 配置保存在 PocketBase，模型请求由服务端发起；接口不可用时自动回退本地识别。</p>
         </aside>
       </div>
     </div>

@@ -1,5 +1,4 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import PocketBase from "pocketbase";
 import {
   BarChartIcon,
   BookmarkIcon,
@@ -17,6 +16,7 @@ import { AccountModal } from "./components/AccountModal.jsx";
 import { formatChineseDate, getLocalDateKey, getWeekDateKeys, millisecondsUntilNextLocalDay } from "./lib/date.js";
 import { isDue } from "./lib/learning.js";
 import { loadCloudData, saveCloudData } from "./lib/pocketbaseSync.js";
+import { pb } from "./lib/pocketbaseClient.js";
 import { calculateStreak, hasPlanActivity, mergeCloudState } from "./lib/stateModel.js";
 import { useLexisleStore } from "./lib/store.js";
 
@@ -28,10 +28,6 @@ const VocabularyPage = lazy(() => import("./pages/VocabularyPage.jsx").then((mod
 const NotesPage = lazy(() => import("./pages/NotesPage.jsx").then((module) => ({ default: module.NotesPage })));
 const InsightsPage = lazy(() => import("./pages/InsightsPage.jsx").then((module) => ({ default: module.InsightsPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage.jsx").then((module) => ({ default: module.SettingsPage })));
-
-const pocketBaseUrl = import.meta.env.VITE_POCKETBASE_URL || "https://pocket.nings.top";
-const pb = new PocketBase(pocketBaseUrl);
-pb.autoCancellation(false);
 
 const LOCAL_SYNC_STATUS = { kind: "local", label: "本地保存" };
 

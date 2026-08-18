@@ -26,16 +26,45 @@ test("account dialog traps focus and closes with Escape", async ({ page }) => {
 });
 
 test("focus reading supports lookup, manual save, translation, and refresh recovery", async ({ page }) => {
-  await page.addInitScript(() => window.localStorage.setItem("lexisle:ai-api-key", "e2e-key"));
-  await page.route("https://ai.test/v1/chat/completions", async (route) => {
-    const body = route.request().postDataJSON();
-    const translating = body.messages[0].content.includes("翻译助手");
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(translating
+  const token = `e30.${Buffer.from(JSON.stringify({ type: "auth", collectionId: "users", exp: 4102444800 })).toString("base64url")}.e2e`;
+  const record = { id: "e2e-user", email: "reader@example.com", name: "Reader", collectionName: "users", collectionId: "users" };
+  await page.addInitScript(({ authToken, authRecord }) => {
+    window.localStorage.setItem("pocketbase_auth", JSON.stringify({ token: authToken, record: authRecord }));
+  }, { authToken: token, authRecord: record });
+
+  await page.route("https://pocket.nings.top/api/**", async (route) => {
+    const request = route.request();
+    const requestUrl = new URL(request.url());
+    const path = requestUrl.pathname;
+    if (path.endsWith("/users/auth-refresh")) {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token, record }) });
+      return;
+    }
+    if (path === "/api/lexisle/ai/settings") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: true, endpoint: "https://ai.test/v1/chat/completions", model: "e2e-model", maxWords: 12, prompt: "", keyConfigured: request.method() === "PUT" }) });
+      return;
+    }
+    if (path.startsWith("/api/lexisle/ai/")) {
+      const translating = path.endsWith("translate-segment");
+      const content = JSON.stringify(translating
         ? { translation: "多年来，睡眠科学家一直认为做梦是大脑夜间的主要工作。" }
-        : { word: "years", lemma: "year", phonetic: "/jɪr/", part: "n.", contextMeaning: "多年", contextExplanation: "这里表示一段较长的时间。", meanings: ["年", "年度"], collocations: ["for years"], example: "For years, sleep scientists believed...", memoryTip: "for years 表示多年来" }) } }] }),
+        : { word: "years", lemma: "year", phonetic: "/jɪr/", part: "n.", contextMeaning: "多年", contextExplanation: "这里表示一段较长的时间。", meanings: ["年", "年度"], collocations: ["for years"], example: "For years, sleep scientists believed...", memoryTip: "for years 表示多年来" });
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ content, model: "e2e-model" }) });
+      return;
+    }
+    if (path.includes("/records")) {
+      if (request.method() === "GET") {
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ page: 1, perPage: 500, totalItems: 0, totalPages: 0, items: [] }) });
+      } else {
+        const body = request.postDataJSON() || {};
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ id: body.client_id || "e2e-record", ...body, created: new Date().toISOString(), updated: new Date().toISOString() }) });
+      }
+      return;
+    }
+    await route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({ status: 404, message: "Unhandled PocketBase E2E route" }),
     });
   });
 
@@ -43,6 +72,7 @@ test("focus reading supports lookup, manual save, translation, and refresh recov
   await page.getByRole("checkbox", { name: /启用 AI 分析/ }).check();
   await page.getByLabel("接口地址").fill("https://ai.test/v1");
   await page.getByLabel("模型名称").fill("e2e-model");
+  await page.getByLabel("API Key").fill("e2e-key");
   await page.getByRole("button", { name: "保存设置" }).click();
   await page.getByRole("button", { name: /图书馆/ }).first().click();
   await page.getByRole("button", { name: "继续阅读" }).first().click();

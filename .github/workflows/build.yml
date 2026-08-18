@@ -82,6 +82,9 @@ jobs:
       - name: Build responsive production image
         run: docker compose build
 
+      - name: Build PocketBase extension image
+        run: docker compose --profile local-backend build pocketbase
+
   pocketbase:
     name: PocketBase migration and sync flow
     runs-on: ubuntu-latest
@@ -113,7 +116,7 @@ jobs:
         working-directory: .
         run: |
           ./pocketbase migrate up --migrationsDir=pb_migrations
-          ./pocketbase serve --http=127.0.0.1:8090 --migrationsDir=pb_migrations > pocketbase.log 2>&1 &
+          LEXISLE_AI_ENCRYPTION_KEY=ci-integration-encryption-key-12 LEXISLE_AI_ALLOW_HTTP=true ./pocketbase serve --http=127.0.0.1:8090 --migrationsDir=pb_migrations --hooksDir=pb_hooks > pocketbase.log 2>&1 &
           for attempt in {1..30}; do
             curl -fsS http://127.0.0.1:8090/api/health && break
             sleep 1
@@ -123,6 +126,18 @@ jobs:
         env:
           POCKETBASE_TEST_URL: http://127.0.0.1:8090
         run: node tests/pocketbase-live.mjs
+
+      - name: Package PocketBase migrations and hooks
+        working-directory: .
+        run: tar -czf lexisle-pocketbase-extension.tar.gz pb_migrations pb_hooks
+
+      - name: Upload PocketBase extension package
+        uses: actions/upload-artifact@v7
+        with:
+          name: lexisle-pocketbase-extension
+          path: lexisle-pocketbase-extension.tar.gz
+          if-no-files-found: error
+          retention-days: 14
 
   release:
     name: Publish GitHub release packages

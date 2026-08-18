@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftIcon, ArrowRightIcon, BookmarkFilledIcon, BookmarkIcon, ChevronLeftIcon, ChevronRightIcon, Cross2Icon, GlobeIcon, ReloadIcon, SpeakerLoudIcon } from "@radix-ui/react-icons";
-import { lookupWordWithAi, readAiApiKey, translateReaderSegment } from "../lib/aiVocabulary.js";
+import { lookupWordWithAi, translateReaderSegment } from "../lib/aiVocabulary.js";
 import { analyzeText, speak } from "../lib/learning.js";
 import { createReaderData, getSentenceForWord, getWordCacheKey } from "../lib/reader.js";
 import { ProgressMeter } from "./PagePrimitives.jsx";
@@ -103,7 +103,7 @@ export function ReaderPage({ article, state, actions, close, navigate, notify })
   const [translationError, setTranslationError] = useState("");
   const savedWords = new Set(state.vocabulary.map((item) => item.word.toLowerCase()));
   const paragraphs = article.text.split(/\n\s*\n/).filter(Boolean);
-  const aiEnabled = Boolean(state.settings.ai?.enabled && state.settings.ai.endpoint && state.settings.ai.model && readAiApiKey());
+  const aiEnabled = Boolean(state.settings.ai?.enabled && state.settings.ai.endpoint && state.settings.ai.model);
   const activeCacheKey = active?.segmentId ? getWordCacheKey(active.segmentId, active.word) : "";
   const detail = activeCacheKey ? readerData.wordDetails[activeCacheKey] : active;
   const translation = currentSegment ? readerData.translations[currentSegment.id] : null;
@@ -152,7 +152,7 @@ export function ReaderPage({ article, state, actions, close, navigate, notify })
 
   const translateCurrent = async (force = false) => {
     if (!currentSegment) return;
-    if (!aiEnabled) { setTranslationError("请先配置并启用 AI，基础阅读和查词不受影响。"); return; }
+    if (!aiEnabled) { setTranslationError("请先登录并配置服务端 AI，基础阅读和查词不受影响。"); return; }
     if (!force && translation) return;
     setTranslationBusy(true);
     setTranslationError("");
@@ -208,7 +208,7 @@ export function ReaderPage({ article, state, actions, close, navigate, notify })
           <div id="reader-content-focus" role="tabpanel" aria-labelledby="reader-mode-focus" className="focus-reader-stage">
             <div className="segment-progress"><div><span>第 {currentIndex + 1} / {readerData.segments.length} 段</span><strong>{currentSegment?.wordCount || 0} 词</strong></div><ProgressMeter value={readerData.completedSegmentIds.length} max={Math.max(1, readerData.segments.length)} /></div>
             {currentSegment ? <div key={currentSegment.id} className="focus-segment-card"><FocusParagraph segment={currentSegment} candidates={analyzed} activeWord={active?.word} onWord={requestWordDetail} onEscape={() => setActive(null)} />
-              <div className="segment-translation-actions"><button type="button" disabled={translationBusy} onClick={() => translateCurrent(Boolean(translation))}>{translationBusy ? <ReloadIcon className="is-spinning" /> : <GlobeIcon />}{translation ? "重新生成翻译" : "翻译当前段"}</button>{!aiEnabled ? <span>配置 AI 后可使用在线翻译</span> : null}</div>
+              <div className="segment-translation-actions"><button type="button" disabled={translationBusy} onClick={() => translateCurrent(Boolean(translation))}>{translationBusy ? <ReloadIcon className="is-spinning" /> : <GlobeIcon />}{translation ? "重新生成翻译" : "翻译当前段"}</button>{!aiEnabled ? <span>登录并配置服务端 AI 后可使用在线翻译</span> : null}</div>
               {translation ? <div className="segment-translation"><span>中文翻译</span><p>{translation.translation}</p></div> : null}
               {translationError ? <div className="recovery-notice" role="alert"><span>{translationError}</span><button type="button" onClick={aiEnabled ? () => translateCurrent(true) : () => navigate("设置")}>{aiEnabled ? "重试" : "配置 AI"}</button></div> : null}
             </div> : null}

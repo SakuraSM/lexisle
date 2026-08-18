@@ -5,7 +5,7 @@
 - This is one responsive Web client: wide screens use immersive article reading and memory trails, while narrow screens use short contextual vocabulary challenges.
 - All navigation destinations are functional product pages in the same client: Today, Library, Review, Vocabulary, Notes, Insights, and Settings. Mobile uses the same data and workflows through a compact header and bottom navigation.
 - Article ingestion supports URL reading through the public Jina Reader endpoint plus a fully local pasted-text fallback. Vocabulary analysis and spaced repetition remain deterministic and usable offline.
-- Optional AI vocabulary analysis uses a user-configured OpenAI-compatible Chat Completions endpoint. Never sync or bundle the API key; keep it browser-local and preserve deterministic local fallback on every provider error.
+- Optional AI vocabulary analysis uses a user-configured OpenAI-compatible Chat Completions endpoint. Persist provider settings in the authenticated user's PocketBase `user_settings` record. The browser must call only authenticated `/api/lexisle/ai/*` PocketBase routes; never call a model provider directly. Encrypt the provider API key on the PocketBase server, never return it to the browser, and preserve deterministic local fallback on every provider error.
 - Both surfaces share electric violet `#5B3FF2`, deep indigo `#171B3A`, amber `#F59E0B`, success teal `#16A085`, mist gray `#F6F7FB`, and the states `新词 / 学习中 / 待复习`.
 - Authentication uses PocketBase at `https://pocket.nings.top`, the `users` auth collection, and email/password. Keep login, registration, logout, session restoration, and service errors shared across all responsive layouts.
 

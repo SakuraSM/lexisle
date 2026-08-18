@@ -1,0 +1,21 @@
+FROM alpine:3.21
+
+ARG POCKETBASE_VERSION=0.39.10
+ARG TARGETARCH=amd64
+WORKDIR /app
+
+RUN apk add --no-cache ca-certificates unzip wget \
+  && wget -q -O /tmp/pocketbase.zip "https://github.com/pocketbase/pocketbase/releases/download/v${POCKETBASE_VERSION}/pocketbase_${POCKETBASE_VERSION}_linux_${TARGETARCH}.zip" \
+  && unzip -q /tmp/pocketbase.zip pocketbase -d /app \
+  && chmod +x /app/pocketbase \
+  && rm /tmp/pocketbase.zip
+
+COPY pb_migrations /app/pb_migrations
+COPY pb_hooks /app/pb_hooks
+
+VOLUME ["/app/pb_data"]
+EXPOSE 8090
+HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -q -O - http://127.0.0.1:8090/api/health || exit 1
+
+CMD ["/app/pocketbase", "serve", "--http=0.0.0.0:8090", "--dir=/app/pb_data", "--migrationsDir=/app/pb_migrations", "--hooksDir=/app/pb_hooks"]

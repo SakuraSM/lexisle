@@ -1,23 +1,50 @@
-const API_KEY_STORAGE = "lexisle:ai-api-key";
+import { pb } from "./pocketbaseClient.js";
 
 export const DEFAULT_AI_PROMPT = "识别对中级英语学习者较生僻、且对理解文章重要的词汇。优先选择能通过上下文学习的实词，避免人名、地名、数字和过于基础的词。";
 
-export function readAiApiKey() {
-  return window.localStorage.getItem(API_KEY_STORAGE) || window.sessionStorage.getItem(API_KEY_STORAGE) || "";
+function apiMessage(error, fallback) {
+  if (error?.status === 401 || error?.status === 403) return "请先登录，再使用服务端 AI。";
+  if (error?.status === 404) return "AI 代理服务尚未部署，请联系管理员。";
+  return error?.response?.message || error?.message || fallback;
 }
 
-export function saveAiApiKey(value, remember) {
-  window.localStorage.removeItem(API_KEY_STORAGE);
-  window.sessionStorage.removeItem(API_KEY_STORAGE);
-  if (!value) return;
-  (remember ? window.localStorage : window.sessionStorage).setItem(API_KEY_STORAGE, value);
+async function defaultSend(path, options) {
+  if (!pb.authStore.isValid) throw Object.assign(new Error("请先登录，再使用服务端 AI。"), { status: 401 });
+  return pb.send(path, options);
 }
 
-export function normalizeChatEndpoint(value) {
-  const trimmed = value.trim().replace(/\/$/, "");
-  if (!trimmed) return "";
-  if (/\/chat\/completions$/i.test(trimmed)) return trimmed;
-  return `${trimmed}/chat/completions`;
+async function sendJson(path, method, body, sendImpl = defaultSend) {
+  try {
+    return await sendImpl(path, {
+      method,
+      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (error) {
+    throw new Error(apiMessage(error, "服务端 AI 请求失败，请稍后重试。"));
+  }
+}
+
+export async function loadAiProviderSettings(sendImpl = defaultSend) {
+  return sendJson("/api/lexisle/ai/settings", "GET", undefined, sendImpl);
+}
+
+export async function saveAiProviderSettings(config, { apiKey = "", clearApiKey = false } = {}, sendImpl = defaultSend) {
+  return sendJson("/api/lexisle/ai/settings", "PUT", {
+    enabled: Boolean(config.enabled),
+    endpoint: String(config.endpoint || "").trim(),
+    model: String(config.model || "").trim(),
+    maxWords: Math.min(30, Math.max(3, Number(config.maxWords) || 12)),
+    prompt: String(config.prompt || "").trim(),
+    apiKey: String(apiKey || "").trim(),
+    clearApiKey: Boolean(clearApiKey),
+  }, sendImpl);
+}
+
+async function callAi(operation, input, sendImpl = defaultSend) {
+  const payload = await sendJson(`/api/lexisle/ai/${operation}`, "POST", input, sendImpl);
+  if (typeof payload?.content !== "string") throw new Error("服务端返回的模型响应不完整。");
+  return payload.content;
 }
 
 function extractJson(content) {
@@ -63,93 +90,10 @@ export function validateAiVocabulary(items, articleText, limit = 18) {
   return result;
 }
 
-function requestBody(config, articleText, testOnly) {
-  const maxWords = Math.min(30, Math.max(3, Number(config.maxWords) || 12));
-  return {
-    model: config.model.trim(),
-    temperature: 0.2,
-    messages: [
-      {
-        role: "system",
-        content: "你是英语词汇学习专家。只输出 JSON 数组，不要 Markdown。数组项格式：{word, phonetic, part, definition, example, reason}。definition 使用简体中文；example 必须摘自原文；word 必须是原文中出现的单个英文单词。",
-      },
-      {
-        role: "user",
-        content: testOnly
-          ? "返回一个空 JSON 数组 []，用于验证接口连通性。"
-          : `${config.prompt || DEFAULT_AI_PROMPT}\n\n最多返回 ${maxWords} 个词。\n\n英文原文：\n${articleText.slice(0, 24000)}`,
-      },
-    ],
-  };
-}
-
-async function callChat(config, apiKey, articleText, testOnly = false, fetchImpl = fetch) {
-  if (!config.endpoint?.trim()) throw new Error("请填写模型接口地址。");
-  if (!config.model?.trim()) throw new Error("请填写模型名称。");
-  if (!apiKey?.trim()) throw new Error("请填写 API Key。");
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45000);
-  try {
-    const response = await fetchImpl(normalizeChatEndpoint(config.endpoint), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}` },
-      body: JSON.stringify(requestBody(config, articleText, testOnly)),
-      signal: controller.signal,
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload?.error?.message || `模型接口返回 ${response.status}`);
-    const content = payload?.choices?.[0]?.message?.content;
-    if (typeof content !== "string") throw new Error("模型响应缺少 choices[0].message.content。");
-    return content;
-  } catch (error) {
-    if (error?.name === "AbortError") throw new Error("模型请求超时，请检查接口地址或网络。");
-    if (error instanceof TypeError) throw new Error("无法连接模型接口，可能被浏览器跨域策略拦截。");
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function callStructuredChat(config, apiKey, messages, fetchImpl = fetch) {
-  if (!config.endpoint?.trim()) throw new Error("请填写模型接口地址。");
-  if (!config.model?.trim()) throw new Error("请填写模型名称。");
-  if (!apiKey?.trim()) throw new Error("请填写 API Key。");
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45000);
-  try {
-    const response = await fetchImpl(normalizeChatEndpoint(config.endpoint), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}` },
-      body: JSON.stringify({ model: config.model.trim(), temperature: 0.2, messages }),
-      signal: controller.signal,
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload?.error?.message || `模型接口返回 ${response.status}`);
-    const content = payload?.choices?.[0]?.message?.content;
-    if (typeof content !== "string") throw new Error("模型响应缺少 choices[0].message.content。");
-    return extractJsonObject(content);
-  } catch (error) {
-    if (error?.name === "AbortError") throw new Error("模型请求超时，请稍后重试。");
-    if (error instanceof TypeError) throw new Error("无法连接模型接口，可能被浏览器跨域策略拦截。");
-    if (error instanceof SyntaxError) throw new Error("模型返回的 JSON 无法解析，请重新生成。");
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 export function validateSegmentTranslation(value) {
   const translation = String(value?.translation || "").trim();
   if (!translation) throw new Error("模型没有返回段落翻译。");
   return { translation };
-}
-
-export async function translateReaderSegment(config, segment, context = {}, apiKey = readAiApiKey(), fetchImpl = fetch) {
-  const payload = await callStructuredChat(config, apiKey, [
-    { role: "system", content: "你是英语阅读翻译助手。只输出 JSON 对象 {translation}。translation 使用简体中文，忠实、自然，不增加原文没有的信息。" },
-    { role: "user", content: `相邻语境（仅用于消歧）：\n前文：${String(context.previous || "").slice(0, 320)}\n后文：${String(context.next || "").slice(0, 320)}\n\n请翻译当前段落：\n${segment.text.slice(0, 5000)}` },
-  ], fetchImpl);
-  return validateSegmentTranslation(payload);
 }
 
 function limitStrings(value, limit) {
@@ -176,20 +120,45 @@ export function validateWordDetail(value, fallback) {
   };
 }
 
-export async function lookupWordWithAi(config, word, sentence, segment, apiKey = readAiApiKey(), fetchImpl = fetch) {
-  const payload = await callStructuredChat(config, apiKey, [
-    { role: "system", content: "你是英语词汇学习专家。只输出 JSON 对象，字段为 word, lemma, phonetic, part, contextMeaning, contextExplanation, meanings, collocations, example, memoryTip。中文解释使用简体中文；meanings 和 collocations 最多各 3 项；example 必须基于当前语境。" },
-    { role: "user", content: `目标词：${word}\n所在句：${sentence.slice(0, 1200)}\n当前段落：${segment.text.slice(0, 5000)}` },
-  ], fetchImpl);
-  return validateWordDetail(payload, { word, sentence });
+export async function translateReaderSegment(_config, segment, context = {}, sendImpl = defaultSend) {
+  const content = await callAi("translate-segment", {
+    segmentText: String(segment.text || "").slice(0, 5000),
+    previous: String(context.previous || "").slice(0, 320),
+    next: String(context.next || "").slice(0, 320),
+  }, sendImpl);
+  try {
+    return validateSegmentTranslation(extractJsonObject(content));
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error("模型返回的 JSON 无法解析，请重新生成。");
+    throw error;
+  }
 }
 
-export async function analyzeVocabularyWithAi(config, articleText, apiKey = readAiApiKey(), fetchImpl = fetch) {
-  const content = await callChat(config, apiKey, articleText, false, fetchImpl);
-  return validateAiVocabulary(extractJson(content), articleText, config.maxWords);
+export async function lookupWordWithAi(_config, word, sentence, segment, sendImpl = defaultSend) {
+  const content = await callAi("lookup-word", {
+    word: String(word || "").slice(0, 120),
+    sentence: String(sentence || "").slice(0, 1200),
+    segmentText: String(segment.text || "").slice(0, 5000),
+  }, sendImpl);
+  try {
+    return validateWordDetail(extractJsonObject(content), { word, sentence });
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error("模型返回的 JSON 无法解析，请重新生成。");
+    throw error;
+  }
 }
 
-export async function testAiConnection(config, apiKey = readAiApiKey(), fetchImpl = fetch) {
-  await callChat(config, apiKey, "Connection test.", true, fetchImpl);
+export async function analyzeVocabularyWithAi(config, articleText, sendImpl = defaultSend) {
+  const content = await callAi("analyze-vocabulary", { articleText: String(articleText || "").slice(0, 24000) }, sendImpl);
+  try {
+    return validateAiVocabulary(extractJson(content), articleText, config.maxWords);
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error("模型返回的 JSON 无法解析，已保留本地分析能力。");
+    throw error;
+  }
+}
+
+export async function testAiConnection(sendImpl = defaultSend) {
+  await callAi("test", {}, sendImpl);
   return true;
 }
