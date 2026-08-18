@@ -104,7 +104,7 @@ export const seedState = {
     notifications: false,
     autoSaveWords: true,
     difficulty: "中级",
-    ai: { enabled: false, endpoint: "", model: "", maxWords: 12, prompt: "", rememberKey: false },
+    ai: { enabled: false, endpoint: "", model: "", maxWords: 12, prompt: "", keyConfigured: false },
     updatedAt: "2026-08-12T00:00:00.000Z",
   },
   tombstones: { articles: [], vocabulary: [], notes: [] },

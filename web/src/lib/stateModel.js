@@ -33,7 +33,7 @@ function normalizeSettings(settings, defaults, fallbackIso) {
     ai: {
       ...defaults.ai,
       ...settings?.ai,
-      rememberKey: Boolean(settings?.ai?.rememberKey),
+      keyConfigured: Boolean(settings?.ai?.keyConfigured),
     },
   };
 }
@@ -216,7 +216,7 @@ export function mergeCloudState(localState, cloudState) {
     ai: {
       ...localState.settings.ai,
       ...cloudState.settings.ai,
-      rememberKey: localState.settings.ai.rememberKey,
+      keyConfigured: localState.settings.ai.keyConfigured,
     },
   } : localState.settings;
 

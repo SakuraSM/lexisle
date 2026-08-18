@@ -118,6 +118,7 @@ function toCloudState(recordsByCollection) {
       model: rawSettings.ai_model,
       maxWords: rawSettings.ai_max_words,
       prompt: rawSettings.ai_prompt,
+      keyConfigured: false,
     },
     updatedAt: rawSettings.updated,
   } : undefined;

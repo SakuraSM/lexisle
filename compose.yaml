@@ -11,3 +11,21 @@ services:
     ports:
       - "${WEB_PORT:-4173}:80"
     restart: unless-stopped
+
+  pocketbase:
+    profiles: ["local-backend"]
+    image: lexisle-pocketbase:local
+    build:
+      context: .
+      dockerfile: Dockerfile.pocketbase
+    environment:
+      LEXISLE_AI_ENCRYPTION_KEY: ${LEXISLE_AI_ENCRYPTION_KEY:-}
+      LEXISLE_AI_ALLOW_HTTP: ${LEXISLE_AI_ALLOW_HTTP:-false}
+    ports:
+      - "${POCKETBASE_PORT:-8090}:8090"
+    volumes:
+      - lexisle-pocketbase-data:/app/pb_data
+    restart: unless-stopped
+
+volumes:
+  lexisle-pocketbase-data:

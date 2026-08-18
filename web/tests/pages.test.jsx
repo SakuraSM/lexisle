@@ -5,6 +5,7 @@ import { seedState } from "../src/data/seed.js";
 import { ProgressMeter } from "../src/pages/PagePrimitives.jsx";
 import { ReviewPage } from "../src/pages/ReviewPage.jsx";
 import { ReaderPage } from "../src/pages/ReaderPage.jsx";
+import { SettingsPage } from "../src/pages/SettingsPage.jsx";
 import { VocabularyPage } from "../src/pages/VocabularyPage.jsx";
 import { createReaderData } from "../src/lib/reader.js";
 
@@ -57,5 +58,14 @@ describe("accessible product pages", () => {
     expect(screen.getByRole("button", { name: "关闭单词详情" })).toBeVisible();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("button", { name: "关闭单词详情" })).not.toBeInTheDocument();
+  });
+
+  it("keeps server AI settings behind authentication", () => {
+    const openAccount = vi.fn();
+    render(<SettingsPage state={seedState} actions={{ updateSettings: vi.fn() }} user={null} openAccount={openAccount} syncStatus={{ kind: "local", label: "本地模式" }} syncNow={vi.fn()} notify={vi.fn()} />);
+    expect(screen.getByRole("textbox", { name: /接口地址/ })).toBeDisabled();
+    expect(screen.getByText("浏览器只请求 PocketBase，不直接连接模型供应商。")).toBeVisible();
+    fireEvent.click(screen.getAllByRole("button", { name: "登录或注册" }).at(-1));
+    expect(openAccount).toHaveBeenCalledTimes(1);
   });
 });

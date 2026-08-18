@@ -132,6 +132,7 @@ function buildCollectionSpecs(usersCollectionId) {
         { name: "ai_model", type: "text", max: 200 },
         { name: "ai_max_words", type: "number", min: 3, max: 30 },
         { name: "ai_prompt", type: "editor" },
+        { name: "ai_api_key_encrypted", type: "text", max: 12000, hidden: true },
       ],
       indexes: ["CREATE UNIQUE INDEX idx_settings_user ON user_settings (user)"],
     }),
@@ -145,6 +146,7 @@ function indexName(indexStatement) {
 function buildCollectionUpdate(existingCollection, spec) {
   const existingFields = new Map(existingCollection.fields.map((field) => [field.name, field]));
   const missingFields = [];
+  const fieldOverrides = new Map();
   for (const expectedField of spec.fields) {
     const existingField = existingFields.get(expectedField.name);
     if (!existingField) {
@@ -154,15 +156,18 @@ function buildCollectionUpdate(existingCollection, spec) {
     if (existingField.type !== expectedField.type) {
       throw new Error(`${spec.name}.${expectedField.name} 类型不兼容：线上为 ${existingField.type}，期望 ${expectedField.type}。`);
     }
+    if (expectedField.hidden === true && existingField.hidden !== true) {
+      fieldOverrides.set(expectedField.name, { ...existingField, hidden: true });
+    }
   }
 
   const existingIndexNames = new Set((existingCollection.indexes || []).map(indexName));
   const missingIndexes = spec.indexes.filter((index) => !existingIndexNames.has(indexName(index)));
   const rulesChanged = ["listRule", "viewRule", "createRule", "updateRule", "deleteRule"].some((key) => existingCollection[key] !== spec[key]);
-  if (!missingFields.length && !missingIndexes.length && !rulesChanged) return null;
+  if (!missingFields.length && !fieldOverrides.size && !missingIndexes.length && !rulesChanged) return null;
 
   return {
-    fields: [...existingCollection.fields, ...missingFields],
+    fields: [...existingCollection.fields.map((field) => fieldOverrides.get(field.name) || field), ...missingFields],
     indexes: [...(existingCollection.indexes || []), ...missingIndexes],
     listRule: spec.listRule,
     viewRule: spec.viewRule,
