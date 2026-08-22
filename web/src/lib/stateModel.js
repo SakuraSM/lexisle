@@ -1,7 +1,7 @@
 import { getLocalDateKey, getWeekDateKeys, shiftDateKey } from "./date.js";
 import { calculateReaderProgress, createReaderData, mergeReaderData } from "./reader.js";
 
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 export const STORAGE_KEY_V3 = "lexisle:data:v3";
 export const STORAGE_KEY_V2 = "lexisle:data:v2";
 export const STORAGE_KEY_V1 = "lexisle:data:v1";

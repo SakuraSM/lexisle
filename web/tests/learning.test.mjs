@@ -56,6 +56,12 @@ test("routes vocabulary analysis through the authenticated PocketBase endpoint",
   assert.equal(result[0].definition, "生物多样性");
 });
 
+test("accepts structured AI data already validated by PocketBase", async () => {
+  const fakeSend = async () => ({ data: [{ word: "biodiversity", definition: "生物多样性", example: "Healthy reefs support biodiversity." }] });
+  const result = await analyzeVocabularyWithAi({ maxWords: 8 }, "Healthy reefs support biodiversity.", fakeSend);
+  assert.equal(result[0].word, "biodiversity");
+});
+
 test("saves provider credentials only through the PocketBase settings route", async () => {
   const fakeSend = async (path, options) => {
     assert.equal(path, "/api/lexisle/ai/settings");

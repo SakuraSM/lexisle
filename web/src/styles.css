@@ -9,10 +9,10 @@
   --primary: #5b3ff2;
   --primary-soft: #efedff;
   --ink: #171b3a;
-  --muted: #737b96;
-  --amber: #f59e0b;
+  --muted: #667085;
+  --amber: #a15c00;
   --amber-soft: #fff4df;
-  --success: #16a085;
+  --success: #087a68;
   --canvas: #f6f7fb;
   --line: #e5e7f0;
 }
@@ -48,6 +48,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .skip-link:focus { transform: translateY(0); }
 .sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
 .page-loading { display: grid; min-height: 40vh; place-items: center; color: var(--muted); }
+
+.app-bootstrap { min-height: 100vh; display: grid; place-items: center; background: var(--canvas); }
+.storage-error { position: fixed; right: 24px; bottom: 24px; z-index: 80; max-width: 420px; padding: 12px 16px; border: 1px solid #b42318; border-radius: 12px; color: #7a271a; background: #fef3f2; box-shadow: 0 12px 32px rgb(56 40 78 / 18%); }
 
 .workspace {
   display: grid;
@@ -695,7 +698,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .mobile-app-header button { display: flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 9px; background: #fff; font-size: 10px; }
   .product-main { grid-column: 1; grid-row: 2; padding: 14px 12px 20px; overflow: auto; }
   .mobile-bottom-nav { grid-row: 3; z-index: 8; display: grid; grid-template-columns: repeat(6, 1fr); padding: 7px 4px calc(7px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: rgba(255,255,255,.97); }
-  .mobile-bottom-nav button { position: relative; display: grid; justify-items: center; gap: 3px; padding: 0; border: 0; color: #7a8299; background: none; font-size: 8px; }
+  .mobile-bottom-nav button { position: relative; display: grid; justify-items: center; gap: 3px; padding: 0; border: 0; color: #626b80; background: none; font-size: 8px; }
   .mobile-bottom-nav button.is-active { color: var(--primary); font-weight: 700; }
   .mobile-bottom-nav svg { width: 18px; height: 18px; }
   .mobile-bottom-nav i { position: absolute; top: -3px; left: calc(50% + 4px); display: grid; min-width: 15px; height: 15px; place-items: center; padding: 0 3px; border-radius: 8px; color: #fff; background: var(--amber); font-size: 7px; font-style: normal; }

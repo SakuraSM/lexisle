@@ -1,20 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { seedState } from "../data/seed.js";
 import { getLocalDateKey } from "./date.js";
 import { analyzeText, reviewWord } from "./learning.js";
+import {
+  acknowledgeSyncEntries,
+  hydrateLocalState,
+  listPendingSyncEntries,
+  persistLocalChanges,
+  readCloudSyncCursors,
+  writeCloudSyncCursors,
+} from "./localRepository.js";
 import { calculateReaderProgress, createReaderData } from "./reader.js";
-import { createDailyPlan, ensureDailyPlan, migrateState, STORAGE_KEY_V1, STORAGE_KEY_V2, STORAGE_KEY_V3 } from "./stateModel.js";
-
-function readState() {
-  try {
-    const v3 = JSON.parse(window.localStorage.getItem(STORAGE_KEY_V3) || "null");
-    const v2 = JSON.parse(window.localStorage.getItem(STORAGE_KEY_V2) || "null");
-    const v1 = JSON.parse(window.localStorage.getItem(STORAGE_KEY_V1) || "null");
-    return migrateState(v3 || v2 || v1, seedState);
-  } catch {
-    return migrateState(null, seedState);
-  }
-}
+import { createDailyPlan, ensureDailyPlan, migrateState } from "./stateModel.js";
 
 function uid(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -46,17 +43,59 @@ function addTombstone(state, kind, record, now = new Date()) {
 }
 
 export function useLexisleStore() {
-  const [state, setState] = useState(readState);
+  const [state, setState] = useState(() => migrateState(null, seedState));
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [persistenceStatus, setPersistenceStatus] = useState({ kind: "loading", message: "正在读取本地学习数据" });
+  const lastQueuedStateRef = useRef(state);
+  const commitQueueRef = useRef(Promise.resolve());
+
+  const queuePersistence = useCallback((previousState, nextState, shouldEnqueueSync) => {
+    lastQueuedStateRef.current = nextState;
+    setPersistenceStatus({ kind: "saving", message: "正在保存本地数据" });
+    commitQueueRef.current = commitQueueRef.current
+      .catch(() => {})
+      .then(() => persistLocalChanges({ previousState, nextState, shouldEnqueueSync }))
+      .then(() => setPersistenceStatus({ kind: "ready", message: "本地数据已保存" }))
+      .catch((error) => {
+        setPersistenceStatus({ kind: "error", message: error?.message || "本地保存失败" });
+        throw error;
+      });
+    return commitQueueRef.current;
+  }, []);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY_V3, JSON.stringify(state));
-  }, [state]);
+    let isCancelled = false;
+    hydrateLocalState({ migrateState, seedState }).then((hydratedState) => {
+      if (isCancelled) return;
+      lastQueuedStateRef.current = hydratedState;
+      setState(hydratedState);
+      setIsHydrated(true);
+      setPersistenceStatus({ kind: "ready", message: "本地数据已载入" });
+    }).catch((error) => {
+      if (isCancelled) return;
+      setIsHydrated(true);
+      setPersistenceStatus({ kind: "error", message: error?.message || "无法读取本地学习数据" });
+    });
+    return () => { isCancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated || state === lastQueuedStateRef.current) return;
+    const previousState = lastQueuedStateRef.current;
+    const nextState = state;
+    queuePersistence(previousState, nextState, true).catch(() => {});
+  }, [isHydrated, queuePersistence, state]);
 
   const update = useCallback((recipe) => {
     setState((current) => recipe(current));
   }, []);
 
-  const replaceState = useCallback((nextState) => setState(migrateState(nextState, seedState)), []);
+  const replaceState = useCallback((nextState) => {
+    const migratedState = migrateState(nextState, seedState);
+    const commit = queuePersistence(lastQueuedStateRef.current, migratedState, false);
+    setState(migratedState);
+    return commit;
+  }, [queuePersistence]);
 
   const ensureToday = useCallback((date = getLocalDateKey()) => {
     update((current) => ensureDailyPlan(current, date));
@@ -212,5 +251,13 @@ export function useLexisleStore() {
     updateSettings,
   }), [addArticle, addVocabulary, deleteArticle, deleteNote, ensureToday, recordReview, removeVocabulary, replaceState, saveNote, toggleArticleSaved, updatePlan, updateProgress, updateReaderProgress, updateSettings]);
 
-  return { state, actions };
+  const storage = useMemo(() => ({
+    acknowledgeSyncEntries,
+    flushPersistence: () => commitQueueRef.current,
+    listPendingSyncEntries,
+    readCloudSyncCursors,
+    writeCloudSyncCursors,
+  }), []);
+
+  return { state, actions, storage, isHydrated, persistenceStatus };
 }

@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { seedState } from "../src/data/seed.js";
 import { calculateLearningReport, calculateStreak, ensureDailyPlan, mergeCloudState, migrateState } from "../src/lib/stateModel.js";
 
-test("migrates v1 state to v3 and creates reader data and the Shanghai daily plan", () => {
+test("migrates v1 state to v4 and creates reader data and the Shanghai daily plan", () => {
   const migrated = migrateState({ version: 1, articles: [], vocabulary: [], notes: [], reviewEvents: [], plans: {}, settings: { dailyGoal: 9 } }, seedState, new Date("2026-08-12T16:30:00.000Z"));
-  assert.equal(migrated.version, 3);
+  assert.equal(migrated.version, 4);
   assert.equal(migrated.plans["2026-08-13"].wordTarget, 9);
   assert.deepEqual(migrated.tombstones, { articles: [], vocabulary: [], notes: [] });
 });

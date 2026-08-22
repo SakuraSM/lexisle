@@ -33,6 +33,17 @@ const password = "integration-pass-123";
 const first = new PocketBase(url);
 try {
   const guest = new PocketBase(url);
+  const metadata = await guest.send("/api/lexisle/meta", { method: "GET" });
+  assert.equal(metadata.localSchemaVersion, 4);
+  assert.equal(metadata.features.serverAi, true);
+  await assert.rejects(
+    guest.send("/api/lexisle/import/article", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: "http://127.0.0.1/private" }),
+    }),
+    (error) => error?.status === 400,
+  );
   await assert.rejects(
     guest.send("/api/lexisle/ai/settings", { method: "GET" }),
     (error) => error?.status === 401,
@@ -69,13 +80,21 @@ try {
     }),
     (error) => error?.status === 400 && /内网地址/.test(error?.response?.message || ""),
   );
+  await assert.rejects(
+    first.send("/api/lexisle/ai/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: false, endpoint: "https://models.example.com/v1", model: "blocked-model", maxWords: 8, prompt: "" }),
+    }),
+    (error) => error?.status === 400 && /管理员尚未配置/.test(error?.response?.message || ""),
+  );
 
   const testResponse = await first.send("/api/lexisle/ai/test", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{}",
   });
-  assert.equal(testResponse.content, "[]");
+  assert.deepEqual(testResponse.data, []);
 
   const state = structuredClone(seedState);
   state.settings.ai = { enabled: true, endpoint: `http://127.0.0.1:${mockModelPort}/v1/chat/completions`, model: "integration-model", maxWords: 8, prompt: "识别重要词汇", keyConfigured: true };
@@ -95,7 +114,7 @@ try {
     headers: { "Content-Type": "application/json" },
     body: "{}",
   });
-  assert.equal(testAfterSync.content, "[]");
+  assert.deepEqual(testAfterSync.data, []);
 
   const second = new PocketBase(url);
   await second.collection("users").authWithPassword(email, password);
