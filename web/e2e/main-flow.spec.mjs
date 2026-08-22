@@ -1,4 +1,34 @@
 import { expect, test } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+
+async function readStoredReaderMode(page) {
+  return page.evaluate(async () => {
+    const database = await new Promise((resolve, reject) => {
+      const request = indexedDB.open("lexisle-learning");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const article = await new Promise((resolve, reject) => {
+      const request = database.transaction("articles").objectStore("articles").get("deep-sleep");
+      request.onsuccess = () => resolve(request.result?.value);
+      request.onerror = () => reject(request.error);
+    });
+    database.close();
+    return article?.readerData?.mode;
+  });
+}
+
+test("primary pages have no serious accessibility violations", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "今天" })).toBeVisible();
+  const todayResults = await new AxeBuilder({ page }).analyze();
+  expect(todayResults.violations.filter((violation) => ["critical", "serious"].includes(violation.impact))).toEqual([]);
+
+  await page.goto("/#设置");
+  await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
+  const settingsResults = await new AxeBuilder({ page }).analyze();
+  expect(settingsResults.violations.filter((violation) => ["critical", "serious"].includes(violation.impact))).toEqual([]);
+});
 
 test("core learning pages stay usable without horizontal overflow", async ({ page }) => {
   await page.goto("/");
@@ -26,6 +56,10 @@ test("account dialog traps focus and closes with Escape", async ({ page }) => {
 });
 
 test("focus reading supports lookup, manual save, translation, and refresh recovery", async ({ page }) => {
+  const openDeepSleep = async () => {
+    const article = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Why Deep Sleep Matters More Than You Think" }) });
+    await article.getByRole("button", { name: "继续阅读" }).click();
+  };
   const token = `e30.${Buffer.from(JSON.stringify({ type: "auth", collectionId: "users", exp: 4102444800 })).toString("base64url")}.e2e`;
   const record = { id: "e2e-user", email: "reader@example.com", name: "Reader", collectionName: "users", collectionId: "users" };
   await page.addInitScript(({ authToken, authRecord }) => {
@@ -75,7 +109,7 @@ test("focus reading supports lookup, manual save, translation, and refresh recov
   await page.getByLabel("API Key").fill("e2e-key");
   await page.getByRole("button", { name: "保存设置" }).click();
   await page.getByRole("button", { name: /图书馆/ }).first().click();
-  await page.getByRole("button", { name: "继续阅读" }).first().click();
+  await openDeepSleep();
   await page.getByRole("tab", { name: "阅读记词" }).click();
   await expect(page.getByRole("tabpanel", { name: "阅读记词" })).toBeVisible();
   await page.getByRole("button", { name: "years" }).first().click();
@@ -86,9 +120,12 @@ test("focus reading supports lookup, manual save, translation, and refresh recov
   await page.getByRole("button", { name: "翻译当前段" }).click();
   await expect(page.getByText(/多年来，睡眠科学家/)).toBeVisible();
   await page.getByRole("button", { name: /完成并读下一段|完成全文/ }).click();
+  await expect.poll(() => readStoredReaderMode(page)).toBe("focus");
+  await page.waitForTimeout(300);
   await page.reload();
+  await expect.poll(() => readStoredReaderMode(page)).toBe("focus");
   await page.getByRole("button", { name: /图书馆/ }).first().click();
-  await page.getByRole("button", { name: "继续阅读" }).first().click();
+  await openDeepSleep();
   await expect(page.getByRole("tab", { name: "阅读记词" })).toHaveAttribute("aria-selected", "true");
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   expect(overflow).toBe(false);

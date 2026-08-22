@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ArrowRightIcon, BookmarkIcon, CheckCircledIcon, LightningBoltIcon, Pencil1Icon, ReaderIcon, ReloadIcon } from "@radix-ui/react-icons";
 import { getLocalDateKey } from "../lib/date.js";
 import { isDue } from "../lib/learning.js";
@@ -13,7 +13,6 @@ export function TodayPage({ state, actions, navigate, openArticle, notify }) {
   const current = state.articles.find((article) => article.progress > 0 && article.progress < 100) || state.articles[0];
   const due = state.vocabulary.filter((item) => isDue(item));
   const streak = calculateStreak(state.plans, dateKey);
-  useEffect(() => setDraftPlan(plan), [plan.date, plan.updatedAt]);
   const tasks = [
     { label: "阅读文章", value: plan.readingDone, target: plan.readingTarget, icon: ReaderIcon, tone: "primary", action: () => current ? openArticle(current.id) : navigate("图书馆") },
     { label: "学习生词", value: plan.wordDone, target: plan.wordTarget, icon: BookmarkIcon, tone: "amber", action: () => navigate("词汇本") },
@@ -23,7 +22,7 @@ export function TodayPage({ state, actions, navigate, openArticle, notify }) {
 
   return (
     <div className="page today-page">
-      <PageHeader title="今天" description="专注完成今天最重要的学习任务。" action={<button className="secondary-button" type="button" onClick={() => setEditing(true)}><Pencil1Icon />编辑计划</button>} />
+      <PageHeader title="今天" description="专注完成今天最重要的学习任务。" action={<button className="secondary-button" type="button" onClick={() => { setDraftPlan(plan); setEditing(true); }}><Pencil1Icon />编辑计划</button>} />
       <section className="today-overview">
         <div className="today-score"><span>今日完成度</span><strong>{completion}%</strong><ProgressMeter value={completion} max={100} /><p><LightningBoltIcon /> 已连续学习 {streak} 天</p></div>
         <div className="task-strip">

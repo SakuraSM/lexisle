@@ -17,6 +17,13 @@ function relationToUsers(usersCollectionId) {
   return { name: "user", type: "relation", required: true, maxSelect: 1, collectionId: usersCollectionId, cascadeDelete: true };
 }
 
+function syncTimestamps() {
+  return [
+    { name: "created", type: "autodate", onCreate: true },
+    { name: "updated", type: "autodate", onCreate: true, onUpdate: true },
+  ];
+}
+
 function collectionSpec({ name, usersCollectionId, fields, indexes }) {
   return {
     type: "base",
@@ -26,7 +33,7 @@ function collectionSpec({ name, usersCollectionId, fields, indexes }) {
     createRule: ownerRule,
     updateRule: ownerRule,
     deleteRule: ownerRule,
-    fields: [relationToUsers(usersCollectionId), ...fields],
+    fields: [relationToUsers(usersCollectionId), ...fields, ...syncTimestamps()],
     indexes,
   };
 }
@@ -50,6 +57,7 @@ function buildCollectionSpecs(usersCollectionId) {
         { name: "analysis_json", type: "json", maxSize: 1048576 },
         { name: "reader_json", type: "json", maxSize: 2097152 },
         { name: "deleted_at", type: "date" },
+        { name: "client_updated_at", type: "date" },
       ],
       indexes: ["CREATE UNIQUE INDEX idx_articles_user_client ON articles (user, client_id)"],
     }),
@@ -70,6 +78,7 @@ function buildCollectionSpecs(usersCollectionId) {
         { name: "interval_days", type: "number", min: 0 },
         { name: "ease_factor", type: "number", min: 1 },
         { name: "deleted_at", type: "date" },
+        { name: "client_updated_at", type: "date" },
       ],
       indexes: [
         "CREATE UNIQUE INDEX idx_vocab_user_client ON vocabulary_items (user, client_id)",
@@ -87,6 +96,7 @@ function buildCollectionSpecs(usersCollectionId) {
         { name: "reading_done", type: "number", min: 0 },
         { name: "word_done", type: "number", min: 0 },
         { name: "review_done", type: "number", min: 0 },
+        { name: "client_updated_at", type: "date" },
       ],
       indexes: ["CREATE UNIQUE INDEX idx_plans_user_date ON daily_plans (user, date)"],
     }),
@@ -99,6 +109,7 @@ function buildCollectionSpecs(usersCollectionId) {
         { name: "result", type: "select", required: true, maxSelect: 1, values: ["again", "hard", "good", "easy"] },
         { name: "reviewed_at", type: "date", required: true },
         { name: "response_ms", type: "number", min: 0 },
+        { name: "client_updated_at", type: "date" },
       ],
       indexes: [
         "CREATE UNIQUE INDEX idx_review_user_client ON review_events (user, client_id)",
@@ -115,6 +126,7 @@ function buildCollectionSpecs(usersCollectionId) {
         { name: "body", type: "editor" },
         { name: "tags", type: "json", maxSize: 65536 },
         { name: "deleted_at", type: "date" },
+        { name: "client_updated_at", type: "date" },
       ],
       indexes: ["CREATE UNIQUE INDEX idx_notes_user_client ON notes (user, client_id)"],
     }),
@@ -133,6 +145,7 @@ function buildCollectionSpecs(usersCollectionId) {
         { name: "ai_max_words", type: "number", min: 3, max: 30 },
         { name: "ai_prompt", type: "editor" },
         { name: "ai_api_key_encrypted", type: "text", max: 12000, hidden: true },
+        { name: "client_updated_at", type: "date" },
       ],
       indexes: ["CREATE UNIQUE INDEX idx_settings_user ON user_settings (user)"],
     }),
@@ -177,6 +190,7 @@ function buildCollectionUpdate(existingCollection, spec) {
   };
 }
 
+try {
 const existingCollections = await pocketBase.collections.getFullList();
 const usersCollection = existingCollections.find((collection) => collection.name === "users" && collection.type === "auth");
 if (!usersCollection) throw new Error("在线 PocketBase 缺少 users 认证集合。");
@@ -216,3 +230,9 @@ if (verification.some((collection) => !collection.exists || collection.missingFi
 }
 
 console.log(JSON.stringify({ url: POCKETBASE_URL, results, verification }, null, 2));
+} catch (error) {
+  const status = error?.status ? `HTTP ${error.status}` : "请求失败";
+  const message = error?.response?.message || error?.message || "未知错误";
+  console.error(`PocketBase 在线迁移失败（${status}）：${message}`);
+  process.exitCode = 1;
+}

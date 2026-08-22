@@ -43,6 +43,7 @@ export async function saveAiProviderSettings(config, { apiKey = "", clearApiKey 
 
 async function callAi(operation, input, sendImpl = defaultSend) {
   const payload = await sendJson(`/api/lexisle/ai/${operation}`, "POST", input, sendImpl);
+  if (payload && Object.hasOwn(payload, "data")) return payload.data;
   if (typeof payload?.content !== "string") throw new Error("服务端返回的模型响应不完整。");
   return payload.content;
 }
@@ -121,13 +122,13 @@ export function validateWordDetail(value, fallback) {
 }
 
 export async function translateReaderSegment(_config, segment, context = {}, sendImpl = defaultSend) {
-  const content = await callAi("translate-segment", {
+  const response = await callAi("translate-segment", {
     segmentText: String(segment.text || "").slice(0, 5000),
     previous: String(context.previous || "").slice(0, 320),
     next: String(context.next || "").slice(0, 320),
   }, sendImpl);
   try {
-    return validateSegmentTranslation(extractJsonObject(content));
+    return validateSegmentTranslation(typeof response === "string" ? extractJsonObject(response) : response);
   } catch (error) {
     if (error instanceof SyntaxError) throw new Error("模型返回的 JSON 无法解析，请重新生成。");
     throw error;
@@ -135,13 +136,13 @@ export async function translateReaderSegment(_config, segment, context = {}, sen
 }
 
 export async function lookupWordWithAi(_config, word, sentence, segment, sendImpl = defaultSend) {
-  const content = await callAi("lookup-word", {
+  const response = await callAi("lookup-word", {
     word: String(word || "").slice(0, 120),
     sentence: String(sentence || "").slice(0, 1200),
     segmentText: String(segment.text || "").slice(0, 5000),
   }, sendImpl);
   try {
-    return validateWordDetail(extractJsonObject(content), { word, sentence });
+    return validateWordDetail(typeof response === "string" ? extractJsonObject(response) : response, { word, sentence });
   } catch (error) {
     if (error instanceof SyntaxError) throw new Error("模型返回的 JSON 无法解析，请重新生成。");
     throw error;
@@ -149,9 +150,9 @@ export async function lookupWordWithAi(_config, word, sentence, segment, sendImp
 }
 
 export async function analyzeVocabularyWithAi(config, articleText, sendImpl = defaultSend) {
-  const content = await callAi("analyze-vocabulary", { articleText: String(articleText || "").slice(0, 24000) }, sendImpl);
+  const response = await callAi("analyze-vocabulary", { articleText: String(articleText || "").slice(0, 24000) }, sendImpl);
   try {
-    return validateAiVocabulary(extractJson(content), articleText, config.maxWords);
+    return validateAiVocabulary(typeof response === "string" ? extractJson(response) : response, articleText, config.maxWords);
   } catch (error) {
     if (error instanceof SyntaxError) throw new Error("模型返回的 JSON 无法解析，已保留本地分析能力。");
     throw error;

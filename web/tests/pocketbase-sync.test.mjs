@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { loadCloudData, saveCloudData } from "../src/lib/pocketbaseSync.js";
+import { loadCloudData, saveCloudChanges, saveCloudData } from "../src/lib/pocketbaseSync.js";
 import { seedState } from "../src/data/seed.js";
 
 function missingError() {
@@ -25,6 +25,27 @@ function fakePocketBase(collections = {}, failures = {}) {
     },
   };
 }
+
+test("uses per-collection cursors for incremental cloud pulls", async () => {
+  const calls = [];
+  const pb = fakePocketBase();
+  const originalCollection = pb.collection;
+  pb.collection = (name) => {
+    const api = originalCollection(name);
+    api.getFullList = async (options) => {
+      calls.push({ name, options });
+      return [];
+    };
+    return api;
+  };
+
+  const cursor = { updated: "2026-08-22T10:00:00.000Z", id: "record-a" };
+  const result = await loadCloudData(pb, "user-1", { cursors: { articles: cursor } });
+
+  assert.match(calls.find((call) => call.name === "articles").options.filter, /updated >/);
+  assert.equal(calls.find((call) => call.name === "articles").options.sort, "updated,id");
+  assert.deepEqual(result.cursors.articles, cursor);
+});
 
 test("reports unavailable when required collections are missing", async () => {
   const failures = Object.fromEntries(["articles", "vocabulary_items", "daily_plans", "review_events", "notes", "user_settings"].map((name) => [name, missingError()]));
@@ -84,4 +105,26 @@ test("never includes API keys in cloud settings payload", async () => {
   await saveCloudData(pb, "user-1", state);
   assert.equal(settingsPayload.apiKey, undefined);
   assert.equal(JSON.stringify(settingsPayload).includes("secret"), false);
+  assert.equal(settingsPayload.ai_endpoint, undefined);
+});
+
+test("uploads only entities present in the local sync outbox", async () => {
+  const state = structuredClone(seedState);
+  const createdCollections = [];
+  const pb = fakePocketBase();
+  const originalCollection = pb.collection;
+  pb.collection = (name) => {
+    const api = originalCollection(name);
+    api.create = async (payload) => {
+      createdCollections.push(name);
+      return { id: `${name}-cloud`, ...payload };
+    };
+    return api;
+  };
+
+  const article = state.articles[0];
+  const result = await saveCloudChanges(pb, "user-1", state, [{ storageKey: `articles:${article.id}`, collection: "articles", entityKey: article.id }]);
+
+  assert.deepEqual(createdCollections, ["articles"]);
+  assert.deepEqual(result.acknowledgedKeys, [`articles:${article.id}`]);
 });

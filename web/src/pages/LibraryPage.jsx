@@ -2,11 +2,8 @@ import { useMemo, useState } from "react";
 import { ArrowRightIcon, BookmarkFilledIcon, BookmarkIcon, Link2Icon, ReaderIcon, TrashIcon } from "@radix-ui/react-icons";
 import { analyzeText } from "../lib/learning.js";
 import { analyzeVocabularyWithAi } from "../lib/aiVocabulary.js";
+import { importArticleFromUrl, preparePastedArticle } from "../lib/articleImport.js";
 import { EmptyState, PageHeader, ProgressMeter } from "./PagePrimitives.jsx";
-
-function cleanReaderText(raw) {
-  return raw.replace(/^Title:.*$/gm, "").replace(/^URL Source:.*$/gm, "").replace(/^Markdown Content:.*$/gm, "").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/^#{1,6}\s+/gm, "").replace(/\n{3,}/g, "\n\n").trim();
-}
 
 export function LibraryPage({ state, actions, openArticle, navigate, notify }) {
   const [mode, setMode] = useState("url");
@@ -29,17 +26,8 @@ export function LibraryPage({ state, actions, openArticle, navigate, notify }) {
     setAnalysisNotice("");
     setBusy(true);
     try {
-      let articleText = text.trim();
-      let articleTitle = title.trim();
-      if (mode === "url") {
-        if (!/^https?:\/\//i.test(url)) throw new Error("请输入完整的 http(s) 文章链接。");
-        const response = await fetch(`https://r.jina.ai/${url}`);
-        if (!response.ok) throw new Error("无法读取此链接，请切换为粘贴英文原文。");
-        const raw = await response.text();
-        articleText = cleanReaderText(raw);
-        articleTitle ||= raw.match(/^Title:\s*(.+)$/m)?.[1]?.trim() || new URL(url).hostname;
-      }
-      if (articleText.split(/\s+/).length < 40) throw new Error("文章内容太短，请至少提供 40 个英文单词。");
+      const importedArticle = mode === "url" ? await importArticleFromUrl(url) : preparePastedArticle({ title, text });
+      const articleText = importedArticle.text;
       let aiAnalysis;
       let analysisMode = "本地";
       let aiFallbackReason = "";
@@ -52,7 +40,7 @@ export function LibraryPage({ state, actions, openArticle, navigate, notify }) {
           setAnalysisNotice(`AI 分析未完成，已使用本地识别：${aiError.message}`);
         }
       }
-      const { article, analyzed } = actions.addArticle({ title: articleTitle, url: mode === "url" ? url : "", text: articleText, difficulty: importDifficulty, analysis: aiAnalysis });
+      const { article, analyzed } = actions.addArticle({ title: importedArticle.title, source: importedArticle.source, url: mode === "url" ? url : "", text: articleText, difficulty: importDifficulty, analysis: aiAnalysis });
       notify(`${analysisMode} 分析完成：识别到 ${analyzed.length} 个重点词汇${aiFallbackReason ? `；AI 未使用：${aiFallbackReason}` : ""}`);
       openArticle(article.id);
       setUrl(""); setTitle(""); setText("");

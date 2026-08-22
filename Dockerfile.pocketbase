@@ -6,12 +6,20 @@ WORKDIR /app
 
 RUN apk add --no-cache ca-certificates unzip wget \
   && wget -q -O /tmp/pocketbase.zip "https://github.com/pocketbase/pocketbase/releases/download/v${POCKETBASE_VERSION}/pocketbase_${POCKETBASE_VERSION}_linux_${TARGETARCH}.zip" \
+  && case "${TARGETARCH}" in amd64) expected="67f68c8041dbb6a35fd7af5997ffc5063a7a7b96bf9df810360788f9e9975408" ;; arm64) expected="5bad497eaf2522418673eacfcc90e75106036f19b4aeeac6e59bc48503c01ddf" ;; *) echo "Unsupported architecture: ${TARGETARCH}"; exit 1 ;; esac \
+  && echo "${expected}  /tmp/pocketbase.zip" | sha256sum -c - \
   && unzip -q /tmp/pocketbase.zip pocketbase -d /app \
   && chmod +x /app/pocketbase \
-  && rm /tmp/pocketbase.zip
+  && rm /tmp/pocketbase.zip \
+  && addgroup -S lexisle \
+  && adduser -S -G lexisle lexisle \
+  && mkdir -p /app/pb_data \
+  && chown -R lexisle:lexisle /app
 
 COPY pb_migrations /app/pb_migrations
 COPY pb_hooks /app/pb_hooks
+
+USER lexisle
 
 VOLUME ["/app/pb_data"]
 EXPOSE 8090

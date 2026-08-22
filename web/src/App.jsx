@@ -15,10 +15,10 @@ import {
 import { AccountModal } from "./components/AccountModal.jsx";
 import { formatChineseDate, getLocalDateKey, getWeekDateKeys, millisecondsUntilNextLocalDay } from "./lib/date.js";
 import { isDue } from "./lib/learning.js";
-import { loadCloudData, saveCloudData } from "./lib/pocketbaseSync.js";
 import { pb } from "./lib/pocketbaseClient.js";
-import { calculateStreak, hasPlanActivity, mergeCloudState } from "./lib/stateModel.js";
+import { calculateStreak, hasPlanActivity } from "./lib/stateModel.js";
 import { useLexisleStore } from "./lib/store.js";
+import { useCloudSync } from "./lib/useCloudSync.js";
 
 const TodayPage = lazy(() => import("./pages/TodayPage.jsx").then((module) => ({ default: module.TodayPage })));
 const LibraryPage = lazy(() => import("./pages/LibraryPage.jsx").then((module) => ({ default: module.LibraryPage })));
@@ -28,8 +28,6 @@ const VocabularyPage = lazy(() => import("./pages/VocabularyPage.jsx").then((mod
 const NotesPage = lazy(() => import("./pages/NotesPage.jsx").then((module) => ({ default: module.NotesPage })));
 const InsightsPage = lazy(() => import("./pages/InsightsPage.jsx").then((module) => ({ default: module.InsightsPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage.jsx").then((module) => ({ default: module.SettingsPage })));
-
-const LOCAL_SYNC_STATUS = { kind: "local", label: "本地保存" };
 
 const navItems = [
   { label: "今天", icon: CalendarIcon },
@@ -56,12 +54,6 @@ function getAuthMessage(error, mode) {
 function routeFromHash() {
   const value = decodeURIComponent(window.location.hash.slice(1));
   return navItems.some((item) => item.label === value) ? value : "今天";
-}
-
-function getSyncStatus(result) {
-  if (result.status === "unavailable") return { kind: "unavailable", label: "同步服务未配置，本地保存中" };
-  if (result.status === "partial") return { kind: "partial", label: `${result.failedCollections.length} 个集合同步失败` };
-  return { kind: "ok", label: "刚刚已同步" };
 }
 
 function Topbar({ state, user, onAccount, dateKey }) {
@@ -96,7 +88,7 @@ function MobileChrome({ active, navigate, user, onAccount, dueCount }) {
 }
 
 export function App() {
-  const { state, actions } = useLexisleStore();
+  const { state, actions, storage, isHydrated, persistenceStatus } = useLexisleStore();
   const [dateKey, setDateKey] = useState(getLocalDateKey);
   const [activeNav, setActiveNav] = useState(routeFromHash);
   const [readerId, setReaderId] = useState("");
@@ -109,18 +101,14 @@ export function App() {
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  const [syncStatus, setSyncStatus] = useState(user ? { kind: "waiting", label: "等待同步" } : LOCAL_SYNC_STATUS);
   const mainRef = useRef(null);
   const returnFocusRef = useRef(null);
-  const stateRef = useRef(state);
-  const syncTimer = useRef(null);
-  const syncReadyUser = useRef("");
-  stateRef.current = state;
 
   const reader = state.articles.find((article) => article.id === readerId);
   const dueCount = useMemo(() => state.vocabulary.filter((item) => isDue(item)).length, [state.vocabulary]);
   const streak = useMemo(() => calculateStreak(state.plans, dateKey), [state.plans, dateKey]);
   const notify = useCallback((message) => setNotice(message), []);
+  const { syncNow, syncStatus } = useCloudSync({ actions, notify, pb, state, storage, user: isHydrated ? user : null });
   const closeAccount = useCallback(() => setLoginOpen(false), []);
   const openAccount = useCallback(() => {
     returnFocusRef.current = document.activeElement;
@@ -144,27 +132,6 @@ export function App() {
     resetMainScroll();
   }, [resetMainScroll]);
 
-  const performSync = useCallback(async (showSummary = false) => {
-    if (!user) return { status: "unavailable", failedCollections: [] };
-    setSyncStatus({ kind: "syncing", label: "正在合并本地与云端数据…" });
-    const loaded = await loadCloudData(pb, user.id);
-    if (loaded.status === "unavailable") {
-      setSyncStatus(getSyncStatus(loaded));
-      if (showSummary) notify("PocketBase 学习集合尚未配置，数据继续安全保存在本机");
-      return loaded;
-    }
-    const merged = mergeCloudState(stateRef.current, loaded.data);
-    actions.replaceState(merged.state);
-    stateRef.current = merged.state;
-    const saved = await saveCloudData(pb, user.id, merged.state);
-    const finalResult = saved.status === "ok" && loaded.status !== "ok" ? loaded : saved;
-    setSyncStatus(getSyncStatus(finalResult));
-    if (showSummary) {
-      notify(`同步完成：云端合并 ${merged.summary.downloaded} 项，本地保留 ${merged.summary.retained} 项，冲突 ${merged.summary.conflicts} 项`);
-    }
-    return finalResult;
-  }, [actions, notify, user]);
-
   useEffect(() => {
     const onHash = () => { setActiveNav(routeFromHash()); resetMainScroll(); };
     window.addEventListener("hashchange", onHash);
@@ -184,6 +151,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (!isHydrated) return undefined;
     let midnightTimer;
     const refreshDate = () => {
       const nextDate = getLocalDateKey();
@@ -199,38 +167,7 @@ export function App() {
     scheduleMidnight();
     document.addEventListener("visibilitychange", onVisibility);
     return () => { window.clearTimeout(midnightTimer); document.removeEventListener("visibilitychange", onVisibility); };
-  }, [actions]);
-
-  useEffect(() => {
-    if (!user) {
-      syncReadyUser.current = "";
-      setSyncStatus(LOCAL_SYNC_STATUS);
-      return undefined;
-    }
-    let cancelled = false;
-    syncReadyUser.current = "";
-    performSync(true).catch(() => {
-      if (!cancelled) setSyncStatus({ kind: "partial", label: "网络不可用，本地保存中" });
-    }).finally(() => {
-      if (!cancelled) syncReadyUser.current = user.id;
-    });
-    return () => { cancelled = true; };
-  }, [performSync, user]);
-
-  useEffect(() => {
-    if (!user || syncReadyUser.current !== user.id) return undefined;
-    window.clearTimeout(syncTimer.current);
-    syncTimer.current = window.setTimeout(async () => {
-      setSyncStatus({ kind: "syncing", label: "正在同步…" });
-      try {
-        const result = await saveCloudData(pb, user.id, state);
-        setSyncStatus(getSyncStatus(result));
-      } catch {
-        setSyncStatus({ kind: "partial", label: "网络不可用，本地保存中" });
-      }
-    }, 1800);
-    return () => window.clearTimeout(syncTimer.current);
-  }, [user, state]);
+  }, [actions, isHydrated]);
 
   useEffect(() => {
     if (!state.settings.notifications || Notification.permission !== "granted") return undefined;
@@ -247,11 +184,6 @@ export function App() {
     const interval = window.setInterval(checkReminder, 60000);
     return () => window.clearInterval(interval);
   }, [state.settings.notifications, state.settings.reminderTime, dueCount]);
-
-  const syncNow = useCallback(async () => {
-    try { await performSync(true); }
-    catch { setSyncStatus({ kind: "partial", label: "网络不可用，本地保存中" }); notify("同步失败，本地数据未受影响，可稍后重试"); }
-  }, [notify, performSync]);
 
   const submitAuth = async (event) => {
     event.preventDefault();
@@ -276,9 +208,12 @@ export function App() {
   const signOut = () => {
     pb.authStore.clear();
     closeAccount();
-    setSyncStatus(LOCAL_SYNC_STATUS);
     notify("已退出账号，本地数据仍会保留");
   };
+
+  if (!isHydrated) {
+    return <main id="main-content" className="app-bootstrap" aria-busy="true"><div className="page-loading" role="status">正在读取本地学习数据…</div></main>;
+  }
 
   let content;
   if (reader) content = <ReaderPage article={reader} state={state} actions={actions} close={() => setReaderId("")} navigate={navigate} notify={notify} />;
@@ -297,6 +232,7 @@ export function App() {
       <Topbar state={state} user={user} onAccount={openAccount} dateKey={dateKey} />
       <MobileChrome active={activeNav} navigate={navigate} user={user} onAccount={openAccount} dueCount={dueCount} />
       <main ref={mainRef} id="main-content" className="product-main" tabIndex="-1"><Suspense fallback={<div className="page-loading" role="status">正在打开页面…</div>}>{content}</Suspense></main>
+      {persistenceStatus.kind === "error" ? <div className="storage-error" role="alert">{persistenceStatus.message}。请保留当前页面并重试。</div> : null}
       {notice ? <button className="toast" type="button" onClick={() => setNotice("")} aria-live="polite">{notice}<Cross2Icon /></button> : null}
       {loginOpen ? <AccountModal authBusy={authBusy} authError={authError} authMode={authMode} email={email} onAuthModeChange={(mode) => { setAuthMode(mode); setAuthError(""); }} onClose={closeAccount} onEmailChange={setEmail} onPasswordChange={setPassword} onPasswordConfirmChange={setPasswordConfirm} onSignOut={signOut} onSubmit={submitAuth} onSync={syncNow} password={password} passwordConfirm={passwordConfirm} returnFocusElement={returnFocusRef.current} syncStatus={syncStatus} user={user} /> : null}
     </div>

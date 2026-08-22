@@ -24,6 +24,7 @@ Lexisle 是一个通过英文文章学习词汇的响应式 Web 应用。导入�
 - 间隔复习、每日计划、词汇本、笔记和学习报告
 - 邮箱登录及跨设备同步
 - 支持 OpenAI-compatible 模型；配置由 PocketBase 保存，请求由服务端代理
+- 本地数据保存在 IndexedDB，离线修改通过增量队列恢复同步
 - 桌面端和移动端响应式布局
 
 ## 本地开发
@@ -68,6 +69,7 @@ docker compose up --build -d
 
 ```bash
 LEXISLE_AI_ENCRYPTION_KEY="replace-me-with-32-char-secret!!" \
+LEXISLE_AI_ALLOWED_HOSTS="api.openai.com,api.example.com" \
 ./pocketbase serve --http=0.0.0.0:8090 \
   --migrationsDir=pb_migrations \
   --hooksDir=pb_hooks
@@ -89,21 +91,25 @@ npm --prefix web run migrate:pocketbase
 
 配置保存在登录用户的 PocketBase `user_settings` 记录中。API Key 由服务端使用 AES-256-GCM 加密，只返回“已配置”状态；浏览器不会取得密钥，也不会直接请求模型供应商。
 
-PocketBase 进程必须设置固定的、长度正好为 32 个字符的 `LEXISLE_AI_ENCRYPTION_KEY`，并替换上例中的占位值。更换该值后，已有模型密钥需要由用户重新保存。生产环境只接受 HTTPS 公网模型地址；`LEXISLE_AI_ALLOW_HTTP=true` 仅用于本地集成测试。
+PocketBase 进程必须设置固定的、长度正好为 32 个字符的 `LEXISLE_AI_ENCRYPTION_KEY`，并替换上例中的占位值。更换该值后，已有模型密钥需要由用户重新保存。生产环境还必须通过 `LEXISLE_AI_ALLOWED_HOSTS` 配置精确域名白名单，只接受 HTTPS 公网地址；`LEXISLE_AI_ALLOW_HTTP=true` 仅用于本地集成测试。
 
-导入分析会发送文章正文；阅读记词模式只发送当前段落、少量相邻上下文和目标单词。模型不可用时，阅读和本地识词仍可继续。
+文章链接读取和模型调用都由 PocketBase Hooks 发起。导入分析会发送文章正文；阅读记词模式只发送当前段落、少量相邻上下文和目标单词。模型不可用时，阅读和本地识词仍可继续。
+
+服务端能力可通过 `GET /api/lexisle/meta` 检查。返回 404 说明当前 PocketBase 尚未部署项目 Hooks。
 
 ## 测试
 
 ```bash
 cd web
+npm run lint
 npm test
 npm run test:ui
 npm run test:e2e
 npm run build
+npm audit --audit-level=high
 ```
 
-CI 还会启动临时 PocketBase，验证迁移、注册、数据恢复、服务端模型代理、密钥不下发和 Docker 镜像构建。
+CI 还会启动临时 PocketBase，验证迁移、注册、增量同步恢复、服务端模型代理、密钥不下发、无障碍规则和 Docker 镜像构建。
 
 ## 项目结构
 
